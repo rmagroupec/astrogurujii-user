@@ -1,0 +1,66 @@
+class AppImages {
+  /// Common
+  static const bgImagePlaceholder = 'assets/images/bg_image_placeholder.png';
+  // static const splashLogo = 'assets/image/splash-logo.svg';
+  static const splashLogo = 'assets/image/logoGuru.svg';
+  // static const splashGuruLogo = 'assets/image/splashLogoGuru.png';
+  static const splashGuruLogo = 'assets/image/splash-screen-astro-guru.png';
+  static const splashGuruLogoS = 'assets/image/Astro Guru Ji Svg Logo.svg';
+  static const otpVerify = 'assets/image/otp_verify.png';
+  static const welcome1 = 'assets/svg/onB1.png';
+  static const welcome2 = 'assets/svg/onB2.png';
+  static const welcome3 = 'assets/svg/onB3.png';
+  static const lgIcon = "assets/image/life_guru_icon.svg";
+  static const login = "assets/image/login.svg";
+  static const loginj = "assets/image/astro_logo_new.png";
+  static const circular_image_icon = "assets/image/circular_astro_logo.png";
+  static const logins = "assets/image/image-77.svg";
+  static const squigglyLine = "assets/svg/Squiggly-Line.svg";
+  static const loginIcon = "assets/svg/loginIcon.png";
+  static const leftStars = "assets/svg/Left-stars.svg";
+  static const heartTestesImage = "assets/svg/heart-img.png";
+  static const school = "assets/svg/astroSpecializations/School.svg";
+  static const language = "assets/svg/astroSpecializations/Languages.svg";
+  static const career = "assets/svg/astroSpecializations/Career.svg";
+  static const offerStar = "assets/svg/astroSpecializations/OfferStar.svg";
+  static const icLogoLine = 'assets/image/login_around.svg';
+  static const icAvatar = 'assets/image/ic_avatar.png';
+  static const icEyeClose = 'assets/images/ic_eye_close.png';
+  static const icEyeOpen = 'assets/images/ic_eye_open.png';
+  static const login_icon = 'assets/image/login_icon.svg';
+  static const arrowIcon = 'assets/svg/arrow.svg';
+  static const walletIcon = 'assets/svg/wallet.svg';
+  static const trendingIcon = 'assets/svg/trending_up.svg';
+  static const dateOfBirthIcon = 'assets/svg/date.svg';
+  static const timeOfBirthIcon = 'assets/svg/schedule.svg';
+  static const placeOfBirthIcon = 'assets/svg/distance.svg';
+  static const horoscopeIcon = 'assets/svg/horoscope_iocn.svg';
+  static const join = 'assets/svg/join.svg';
+  static const matching = 'assets/svg/early_on.svg';
+  static const kundliIcon = 'assets/svg/kundli_icon.svg';
+  static const icon = 'assets/svg/chevron-rt.svg';
+  static const sunrise = 'assets/svg/Sunrise.svg';
+  static const sunset = 'assets/svg/Sunset.svg';
+  static const moonrise = 'assets/svg/Moonrise.svg';
+  static const moonset = 'assets/svg/Moonset.svg';
+  static const moonsign = 'assets/svg/MoonSign.svg';
+  static const sunsign = 'assets/svg/SunSign.svg';
+  static const karan = 'assets/svg/Karan.svg';
+  static const yoga = 'assets/svg/Yoga-Panchaang.svg';
+  static const nakshatra = 'assets/svg/Nakshatra.svg';
+  static const disha = 'assets/svg/DishaShool.svg';
+  static const watch = 'assets/svg/alarm_on.svg';
+
+  static const icLogo = 'assets/image/astro_push.svg';
+  static const sms_failed = 'assets/svg/sms_failed.svg';
+
+  static const heart_plus = 'assets/image/heart_plus.png';
+  static const person_add = 'assets/image/person_add.png';
+  static const person_add_dark = 'assets/image/person_add_dark.png';
+  static const closeIcon = 'assets/image/icon_close.png';
+  static const checkIcon = 'assets/image/check.png';
+  static const private_icon = 'assets/image/private_icon.png';
+  static const secure_icon = 'assets/image/secure_icon.png';
+  static const verified_icon = 'assets/image/verified_icon.png';
+  static const indian_flag_icon = 'assets/image/indian_flag.png';
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Astro Gurujii</string>
+    <string name="facebook_app_id">5f9c0856-de38-57d7-9650-23778cb0926c</string>
+    <string name="fb_login_protocol_scheme">fbYOUR_FACEBOOK_APP_ID_HERE</string>
+</resources>

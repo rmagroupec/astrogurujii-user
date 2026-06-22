@@ -1,0 +1,4 @@
+-keep class io.agora.** { *; }
+-keep class org.webrtc.** { *; }
+-keep class android.hardware.camera2.** { *; }
+-keep class android.media.** { *; }

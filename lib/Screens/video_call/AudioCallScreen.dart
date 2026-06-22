@@ -1,0 +1,709 @@
+// lib/Screens/video_call/AfterCallConnecting.dart (USER APP)
+
+import 'dart:async';
+import 'dart:math' as math;
+
+import 'package:agora_rtc_engine/agora_rtc_engine.dart';
+import 'package:astro_gurujii/Screens/WebServices/HttpServices.dart';
+import 'package:astro_gurujii/Screens/video_call/Controllers/agora_controller.dart';
+import 'package:astro_gurujii/Screens/video_call/Helpers/utils.dart';
+import 'package:astro_gurujii/Setup/SetUp.dart';
+import 'package:astro_gurujii/widget/bottom_navigation_bar_custom.dart';
+
+import 'package:audioplayers/audioplayers.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_rating_bar/flutter_rating_bar.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:get/get.dart';
+import 'package:quiver/async.dart';
+
+class AfterCallConnecting extends StatefulWidget {
+  final String channelName;
+  final String name;
+  final String profile;
+  final String callfrom;
+  final String token;
+  final String wallet;
+  final String rate;
+
+  const AfterCallConnecting({
+    Key? key,
+    required this.channelName,
+    required this.name,
+    required this.profile,
+    required this.callfrom,
+    required this.token,
+    this.wallet = '0',
+    this.rate   = '1',
+  }) : super(key: key);
+
+  @override
+  State<AfterCallConnecting> createState() => _AfterCallConnectingState();
+}
+
+class _AfterCallConnectingState extends State<AfterCallConnecting> {
+  static const _dbUrl = 'https://astrogurujii-production-default-rtdb.firebaseio.com/';
+
+  // ── Static engine reference so dispose can fully clean up ─────────────────
+  static RtcEngine?        _sharedEngine;
+  static Completer<void>?  _releaseCompleter;
+
+  final HttpServices _httpService = HttpServices();
+  bool isSomeOneJoinedCall = false;
+
+  AgoraController get _agoraCtrl {
+    if (Get.isRegistered<AgoraController>()) {
+      return Get.find<AgoraController>();
+    }
+    return Get.put(AgoraController());
+  }
+
+  AudioPlayer audioPlayer    = AudioPlayer();
+  AudioCache  audioCache     = AudioCache();
+  bool isRingtonePlaying     = false;
+
+  // ── Timers ─────────────────────────────────────────────────────────────────
+  Timer? _statusPollTimer;
+  Timer? _meetingTimer;
+  Timer? _callTimer;
+  Timer? _countdownTick;
+
+  // ── Agora ──────────────────────────────────────────────────────────────────
+  bool isMuted      = false;
+  bool isHold       = false;
+  bool isSpeakerOn  = false;
+  String callStatus = 'Connecting';
+  bool _disposed    = false;
+  int _agoraRetryCount = 0;
+
+  // ── Elapsed ────────────────────────────────────────────────────────────────
+  int    _elapsedSeconds = 0;
+  String _displayTime    = '00:00';
+
+  // ── Meeting timer ──────────────────────────────────────────────────────────
+  int meetingDuration    = 0;
+  var meetingDurationTxt = '00:00'.obs;
+
+  // ── Firebase countdown ─────────────────────────────────────────────────────
+  final ValueNotifier<int> _countdownNotifier = ValueNotifier<int>(0);
+  StreamSubscription<DatabaseEvent>? _firebaseSub;
+
+  // ── Abort countdown ────────────────────────────────────────────────────────
+  final int _start         = 119;
+  int meetingDurationCount = 119;
+  var meetingDurationTxtCount = '00:00'.obs;
+  StreamSubscription? _abortSub;
+
+  // ── Rating ─────────────────────────────────────────────────────────────────
+  double ratingPoint = 0.0;
+  final TextEditingController reviewControler = TextEditingController();
+  bool _ratingDialogShown = false;
+
+  final List<int> _users = [];
+
+  @override
+  void initState() {
+    super.initState();
+
+    final walletInt = int.tryParse(widget.wallet) ?? 0;
+    final rateInt   = int.tryParse(widget.rate)   ?? 1;
+    final seedSecs  = rateInt > 0 ? (walletInt ~/ rateInt) * 60 + 60 : 0;
+    _countdownNotifier.value = seedSecs.clamp(0, 99999);
+
+    _preloadRingtone();
+    _playRingtone();
+    _startAbortTimer();
+    _startMeetingTimer();
+    _subscribeCallSession();
+
+    _statusPollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _checkStatus());
+
+    _httpService.call_status_update(channel_id: widget.channelName, status: 'accept_astro');
+
+    FirebaseMessaging.instance.getInitialMessage();
+    FirebaseMessaging.onMessage.listen(_handlePush);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initAgoraWithDelay();
+    });
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _statusPollTimer?.cancel();
+    _meetingTimer?.cancel();
+    _callTimer?.cancel();
+    _countdownTick?.cancel();
+    _firebaseSub?.cancel();
+    try { _abortSub?.cancel(); } catch (_) {}
+    _countdownNotifier.dispose();
+    reviewControler.dispose();
+    _stopRingtone();
+
+    final engine = _sharedEngine;
+    _sharedEngine = null;
+
+    if (engine != null) {
+      final completer = Completer<void>();
+      _releaseCompleter = completer;
+
+      Future(() async {
+        try { await engine.leaveChannel(); } catch (_) {}
+        await Future.delayed(const Duration(milliseconds: 400));
+        try { await engine.release(); } catch (_) {}
+        if (!completer.isCompleted) completer.complete();
+        _releaseCompleter = null;
+      });
+    }
+
+    super.dispose();
+  }
+
+  Future<void> _initAgoraWithDelay() async {
+    final prev = _releaseCompleter;
+    if (prev != null && !prev.isCompleted) {
+      await prev.future.timeout(
+        const Duration(seconds: 3),
+        onTimeout: () {},
+      );
+    }
+
+    if (_disposed || !mounted) return;
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (_disposed || !mounted) return;
+    await _initAgoraRTC();
+  }
+
+  Future<void> _initAgoraRTC() async {
+    if (_disposed || !mounted) return;
+
+    const appId = '8782e154141a4c0bbc8acaa3004d21f2';
+    if (appId.isEmpty) {
+      debugPrint('[AfterCall] Agora App ID empty');
+      return;
+    }
+
+    try {
+      final engine = createAgoraRtcEngine();
+      _sharedEngine = engine;
+
+      await engine.initialize(RtcEngineContext(appId: appId));
+      if (_disposed) { await engine.release(); _sharedEngine = null; return; }
+
+      await engine.enableAudio();
+
+      engine.registerEventHandler(RtcEngineEventHandler(
+        onJoinChannelSuccess: (conn, elapsed) {
+          print('[AfterCall] ✅ joined uid=${conn.localUid}');
+          if (mounted && !_disposed) setState(() {});
+        },
+        onUserJoined: (conn, uid, elapsed) {
+          print('[AfterCall] 👤 user joined uid=$uid');
+          _agoraCtrl.startMeetingTimer();
+          isSomeOneJoinedCall = true;
+          _startCallTimer();
+          if (mounted && !_disposed) setState(() {
+            _users.add(uid);
+            callStatus = 'Connected';
+          });
+        },
+        onUserOffline: (conn, uid, reason) {
+          _callTimer?.cancel();
+          if (mounted && !_disposed) setState(() {
+            _users.remove(uid);
+            callStatus = 'Offline';
+          });
+        },
+        onLeaveChannel: (conn, stats) {
+          if (mounted && !_disposed) setState(() => _users.clear());
+        },
+        onError: (code, msg) {
+          print('[AfterCall] ❌ Agora error: $code — $msg');
+        },
+      ));
+
+      await engine.enableWebSdkInteroperability(true);
+
+      if (_disposed || !mounted) return;
+
+      await engine.joinChannel(
+        token    : widget.token,
+        channelId: widget.channelName,
+        uid      : 1, 
+        options  : const ChannelMediaOptions(),
+      );
+print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}');
+      print('[AfterCall] joinChannel sent for ${widget.channelName}');
+    } catch (e) {
+      print('[AfterCall] Agora init error: $e');
+      if (mounted && !_disposed) {
+        _agoraRetryCount++;
+        if (_agoraRetryCount <= 2) {
+          setState(() => callStatus = 'Connecting...');
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted && !_disposed) _initAgoraRTC();
+          });
+        } else {
+          setState(() => callStatus = 'Try again. Tap end & reconnect.');
+        }
+      }
+    }
+  }
+
+  void _subscribeCallSession() {
+    final walletInt = int.tryParse(widget.wallet) ?? 0;
+    final rateInt   = int.tryParse(widget.rate)   ?? 1;
+
+    final ref = FirebaseDatabase.instanceFor(
+      app        : Firebase.app(),
+      databaseURL: _dbUrl,
+    ).ref().child('CallSession').child(widget.channelName);
+
+    _firebaseSub = ref.onValue.listen((event) {
+      if (!mounted || _disposed) return;
+      final raw = event.snapshot.value;
+      if (raw == null) return;
+
+      final data   = Map<String, dynamic>.from(raw as Map);
+      final status = (data['status'] ?? '') as String;
+
+      if (['end_astro', 'end_user', 'wallet_empty'].contains(status)) {
+        _countdownNotifier.value = 0;
+        _countdownTick?.cancel();
+        _showRatingDialogOnce();
+        return;
+      }
+
+      final accurate = _computeAccurate(data, walletInt, rateInt);
+      if (accurate == null) return;
+
+      final local = _countdownNotifier.value;
+      if ((local - accurate).abs() > 10) {
+        _countdownNotifier.value = accurate;
+      }
+    });
+
+    _countdownTick = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (_disposed) return;
+      final cur = _countdownNotifier.value;
+      if (cur > 0) _countdownNotifier.value = cur - 1;
+    });
+  }
+
+  int? _computeAccurate(Map<String, dynamic> data, int walletInt, int rateInt) {
+    final nowMs         = DateTime.now().millisecondsSinceEpoch;
+    final rawMaxMinutes = data['max_minutes'];
+    final rawLastTick   = data['last_tick_at'];
+    final rawStartedAt  = data['started_at'];
+
+    if (rawMaxMinutes != null) {
+      final maxSec = (int.tryParse(rawMaxMinutes.toString()) ?? 0) * 60;
+      if (rawLastTick != null) {
+        final elapsed = ((nowMs - (int.tryParse(rawLastTick.toString()) ?? nowMs)) / 1000).floor();
+        return (maxSec - elapsed).clamp(0, maxSec);
+      }
+      return maxSec;
+    }
+
+    if (rawStartedAt != null) {
+      final elapsed = ((nowMs - (int.tryParse(rawStartedAt.toString()) ?? nowMs)) / 1000).floor();
+      final maxSec  = rateInt > 0 ? (walletInt ~/ rateInt) * 60 : 0;
+      return (maxSec - elapsed).clamp(0, maxSec);
+    }
+    return null;
+  }
+
+  Future<void> _preloadRingtone() async {
+    try { await audioCache.load('ring.mp3'); } catch (_) {}
+  }
+
+  Future<void> _playRingtone() async {
+    try {
+      if (!isRingtonePlaying) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        await audioPlayer.play(AssetSource('ring.mp3'));
+        isRingtonePlaying = true;
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _stopRingtone() async {
+    try {
+      if (isRingtonePlaying) { await audioPlayer.stop(); isRingtonePlaying = false; }
+    } catch (_) {}
+  }
+
+  void _handlePush(RemoteMessage msg) {
+    final type = msg.data['notification_type']?.toString() ?? '';
+    if (type == 'end_user') {
+      _endCall();
+    } else if (type == 'reject_astro') {
+      _statusPollTimer?.cancel();
+      try { _abortSub?.cancel(); } catch (_) {}
+      _endCall();
+      if (mounted && !_disposed) Navigator.pop(context);
+    }
+  }
+
+  Future<void> _checkStatus() async {
+    if (_disposed) return;
+    final res = await _httpService.call_initiate_status(channel_id: widget.channelName);
+    if (!mounted || _disposed) return;
+    if (res?.status != true) return;
+
+    final s = res!.results?.status ?? '';
+    if (s == 'accept_astro') {
+      try { _abortSub?.cancel(); } catch (_) {}
+    } else if (s == 'reject_astro') {
+      _statusPollTimer?.cancel();
+      try { _abortSub?.cancel(); } catch (_) {}
+      if (mounted && !_disposed) Navigator.pop(context);
+    } else if (s == 'end_user') {
+      _statusPollTimer?.cancel();
+      try { _abortSub?.cancel(); } catch (_) {}
+      _endCall();
+    }
+  }
+
+  void _startAbortTimer() {
+    final countdown = CountdownTimer(Duration(seconds: _start), const Duration(seconds: 1));
+    _abortSub = countdown.listen(null);
+    _abortSub!.onData((_) {
+      if (!mounted || _disposed) return;
+      final m = meetingDurationCount ~/ 60;
+      final s = meetingDurationCount % 60;
+      meetingDurationTxtCount.value = '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+      setState(() => meetingDurationCount--);
+    });
+    _abortSub!.onDone(() => _getChangeConnectionApi('disconnect_user'));
+  }
+
+  void _startMeetingTimer() {
+    _meetingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _disposed) return;
+      final m = meetingDuration ~/ 60;
+      final s = meetingDuration % 60;
+      meetingDurationTxt.value = '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+      setState(() => meetingDuration++);
+    });
+  }
+
+  void _startCallTimer() {
+    _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _disposed) return;
+      setState(() {
+        _elapsedSeconds++;
+        final d = Duration(seconds: _elapsedSeconds);
+        _displayTime = '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+      });
+    });
+  }
+
+  Future<void> _getChangeConnectionApi(String status) async {
+    try {
+      await _httpService.change_connection_request_status(channel_id: widget.channelName, status: status);
+    } catch (_) {}
+  }
+
+  Future<void> _callAliForRating(double rating, String text) async {
+    final res = await _httpService.add_rating(
+      channel_id: widget.channelName,
+      rating    : rating.toString(),
+      review    : text.isEmpty ? 'Good' : text,
+    );
+    if (!mounted || _disposed) return;
+    if (res?.status == true) {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MainHomeScreenWithBottomNavigation()));
+    } else {
+      Fluttertoast.showToast(msg: 'Something went wrong');
+    }
+  }
+
+  void _endCall() {
+    try {
+      _users.clear();
+      _sharedEngine?.leaveChannel();
+      _meetingTimer?.cancel();
+    } catch (_) {}
+  }
+
+  void _showRatingDialogOnce() {
+    if (_ratingDialogShown || !mounted || _disposed) return;
+    _ratingDialogShown = true;
+    _showRatingDialog(context);
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!isSomeOneJoinedCall) return true;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title  : const Text('Minimize Call'),
+        content: const Text('Call is still active. You can return from the home screen.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child    : const Text('Stay'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child    : const Text('Minimize', style: TextStyle(color: Colors.orange)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sw = MediaQuery.of(context).size.width;
+    final sh = MediaQuery.of(context).size.height;
+
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        backgroundColor: primaryColor,
+        body: SafeArea(
+          child: Stack(children: [
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin : Alignment.topCenter,
+                  end   : Alignment.bottomCenter,
+                  colors: [primaryColor.withOpacity(0.8), primaryColor],
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: Container(
+                height    : sh * 0.4,
+                decoration:  BoxDecoration(
+                    color       : primaryColor,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
+              ),
+            ),
+            Positioned(
+              top : sh * 0.025,
+              left: 10,
+              child: IconButton(
+                icon     : Icon(Icons.arrow_back_ios, color: whiteColor, size: sw * 0.06),
+                onPressed: () async {
+                  final pop = await _onWillPop();
+                  if (pop && mounted && !_disposed) Navigator.pop(context);
+                },
+              ),
+            ),
+            Positioned(
+              top  : sh * 0.13,
+              left : sw * 0.075,
+              right: sw * 0.075,
+              child: Container(
+                padding: EdgeInsets.symmetric(vertical: sh * 0.06, horizontal: sw * 0.04),
+                decoration: BoxDecoration(
+                  color       : whiteColor,
+                  borderRadius: BorderRadius.circular(25),
+                  border      : Border.all(color: primaryColor, width: 2),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    TweenAnimationBuilder<double>(
+                      tween   : Tween(begin: 0, end: 2 * math.pi),
+                      duration: const Duration(seconds: 10),
+                      builder : (_, v, child) => Transform.rotate(angle: v, child: child),
+                      child: CircleAvatar(
+                        radius         : 60,
+                        backgroundColor: Colors.grey.withOpacity(0.2),
+                        backgroundImage: NetworkImage(widget.profile),
+                      ),
+                    ),
+                    SizedBox(height: sh * 0.03),
+                    Text(widget.name,
+                        style: TextStyle(color: Colors.black, fontSize: sw * 0.054, fontWeight: FontWeight.bold)),
+                    SizedBox(height: sh * 0.01),
+                    Text(
+                      callStatus,
+                      style: TextStyle(
+                          color     : callStatus == 'Connected' ? Colors.green : Colors.grey,
+                          fontSize  : sw * 0.035,
+                          fontWeight: FontWeight.w700),
+                    ),
+                    SizedBox(height: sh * 0.03),
+                    ValueListenableBuilder<int>(
+                      valueListenable: _countdownNotifier,
+                      builder: (_, secs, __) {
+                        final m          = (secs ~/ 60).toString().padLeft(2, '0');
+                        final s          = (secs  % 60).toString().padLeft(2, '0');
+                        final isLow      = secs < 120;
+                        final isCritical = secs < 60;
+                        return Column(
+                          children: [
+                            Text('$m:$s',
+                                style: TextStyle(
+                                    color     : isCritical ? Colors.red : isLow ? Colors.orange : Colors.black,
+                                    fontSize  : sw * 0.05,
+                                    fontWeight: FontWeight.w600)),
+                            if (isLow)
+                              Text(
+                                isCritical ? '⚠ Low Balance' : 'Balance running low',
+                                style: TextStyle(color: isCritical ? Colors.red : Colors.orange, fontSize: sw * 0.03),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                    SizedBox(height: sh * 0.01),
+                    Text(_displayTime, style: TextStyle(color: Colors.black, fontSize: sw * 0.035, fontWeight: FontWeight.w300)),
+                    SizedBox(height: sh * 0.06),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _actionBtn(
+                          !isMuted ? Icons.mic_off : Icons.mic,
+                          !isMuted ? 'Mute' : 'Unmute', sw,
+                          () {
+                            setState(() => isMuted = !isMuted);
+                            _sharedEngine?.muteLocalAudioStream(isMuted);
+                          },
+                          !isMuted ? Colors.white : Colors.grey.shade300,
+                        ),
+                        _actionBtn(Icons.pause, isHold ? 'Resume' : 'Hold', sw,
+                          () {
+                            setState(() => isHold = !isHold);
+                            if (!isHold) {
+                              _sharedEngine?.muteLocalAudioStream(true);
+                              _sharedEngine?.disableAudio();
+                              setState(() => callStatus = 'On Hold');
+                            } else {
+                              _sharedEngine?.muteLocalAudioStream(false);
+                              _sharedEngine?.enableAudio();
+                              setState(() => callStatus = 'Connected');
+                            }
+                          },
+                          isHold ? Colors.grey.shade300 : Colors.white,
+                        ),
+                        _actionBtn(
+                          Icons.volume_up,
+                          isSpeakerOn ? 'Speaker' : 'Earpiece', sw,
+                          () {
+                            setState(() => isSpeakerOn = !isSpeakerOn);
+                            _sharedEngine?.setEnableSpeakerphone(isSpeakerOn);
+                          },
+                          isSpeakerOn ? Colors.grey.shade300 : Colors.white,
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: sh * 0.06),
+                    GestureDetector(
+                      onTap: () {
+                        _getChangeConnectionApi(isSomeOneJoinedCall ? 'end_user' : 'disconnect_user');
+                        _endCall();
+                        _showRatingDialogOnce();
+                      },
+                      child: CircleAvatar(
+                        backgroundColor: Colors.red,
+                        radius: sw * 0.0875,
+                        child : Icon(Icons.call_end, color: Colors.white, size: sw * 0.075),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionBtn(IconData icon, String label, double sw, VoidCallback onTap, Color bgColor) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(children: [
+        Container(
+          padding   : const EdgeInsets.all(17),
+          decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(50)),
+          child: Icon(icon, color: Colors.black, size: sw * 0.06),
+        ),
+        const SizedBox(height: 8),
+        Text(label, style: TextStyle(color: Colors.black, fontSize: sw * 0.03)),
+      ]),
+    );
+  }
+
+  void _showRatingDialog(BuildContext ctx) {
+    showDialog(
+      context           : ctx,
+      barrierDismissible: false,
+      builder: (dCtx) => AlertDialog(
+        insetPadding: const EdgeInsets.only(left: 20, right: 20, bottom: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        content: StatefulBuilder(
+          builder: (_, ss) => Column(
+            mainAxisSize     : MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              const Text('Please rate your experience', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 20),
+              RatingBar.builder(
+                itemSize     : 30,
+                glowColor    : const Color(0xfff19425),
+                initialRating: ratingPoint,
+                itemBuilder  : (_, __) => const Icon(Icons.star, color: Color(0xfff19425)),
+                onRatingUpdate: (r) => ss(() => ratingPoint = r),
+              ),
+              const SizedBox(height: 20),
+              const Text('Additional comments', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
+              const SizedBox(height: 20),
+              Container(
+                width     : double.infinity, height: 120,
+                decoration: BoxDecoration(color: Colors.grey.withOpacity(0.5), borderRadius: BorderRadius.circular(5)),
+                padding: const EdgeInsets.only(left: 10, bottom: 5),
+                child  : TextFormField(
+                  controller     : reviewControler,
+                  textInputAction: TextInputAction.newline,
+                  keyboardType   : TextInputType.multiline,
+                  minLines: null, maxLines: null, expands: true,
+                  decoration: const InputDecoration(
+                    border   : InputBorder.none,
+                    hintText : 'Review Here',
+                    hintStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              InkWell(
+                onTap: () => ss(() {
+                  if (ratingPoint < 1) {
+                    Fluttertoast.showToast(msg: 'Please give your valuable feedback');
+                  } else {
+                    Navigator.pop(dCtx);
+                    _callAliForRating(ratingPoint, reviewControler.text);
+                  }
+                }),
+                child: Container(
+                  height   : 45,
+                  width    : double.infinity,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [Color(0xffFC7601), Color(0xffFC7601)]),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text('SUBMIT', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+} // Cleanly closes _AfterCallConnectingState

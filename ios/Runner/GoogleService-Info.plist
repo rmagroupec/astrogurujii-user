@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>API_KEY</key>
+	<string>AIzaSyBTjESXaAuZpgxD6lpkv5ZKAK8ET1MBtgk</string>
+	<key>GCM_SENDER_ID</key>
+	<string>307653017355</string>
+	<key>PLIST_VERSION</key>
+	<string>1</string>
+	<key>BUNDLE_ID</key>
+	<string>com.ios.astrogurujiii</string>
+	<key>PROJECT_ID</key>
+	<string>astrogurujii-production</string>
+	<key>STORAGE_BUCKET</key>
+	<string>astrogurujii-production.firebasestorage.app</string>
+	<key>IS_ADS_ENABLED</key>
+	<false></false>
+	<key>IS_ANALYTICS_ENABLED</key>
+	<false></false>
+	<key>IS_APPINVITE_ENABLED</key>
+	<true></true>
+	<key>IS_GCM_ENABLED</key>
+	<true></true>
+	<key>IS_SIGNIN_ENABLED</key>
+	<true></true>
+	<key>GOOGLE_APP_ID</key>
+	<string>1:307653017355:ios:263e96197a143379c8ec0e</string>
+	<key>DATABASE_URL</key>
+	<string>https://astrogurujii-production-default-rtdb.firebaseio.com</string>
+</dict>
+</plist>

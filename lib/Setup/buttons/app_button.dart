@@ -46,8 +46,8 @@ class AppButton extends StatelessWidget {
       width: width ?? double.infinity,
       child: ElevatedButton(
         child: _buildChildWidget(),
-
         style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor, // ✅ FIXED: was commented out
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(
                 cornerRadius ?? AppDimens.buttonCornerRadius),
@@ -56,11 +56,9 @@ class AppButton extends StatelessWidget {
             color: borderColor ?? Colors.transparent,
             width: borderWidth ?? 0,
           ),
-          // primary: backgroundColor,
           padding: EdgeInsets.all(0),
         ),
         onPressed: onPressed,
-
       ),
     );
   }

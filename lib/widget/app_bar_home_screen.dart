@@ -100,7 +100,7 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
         InkWell(
           onTap: onSupportTap,
           child: Padding(
-            padding: const EdgeInsets.only(top: 15, right: 6),
+            padding: const EdgeInsets.only(top: 5, right: 6),
             child: Stack(
               children: <Widget>[
                 Image.asset(

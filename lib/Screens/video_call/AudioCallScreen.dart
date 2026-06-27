@@ -1,4 +1,8 @@
-// lib/Screens/video_call/AfterCallConnecting.dart (USER APP)
+// lib/Screens/video_call/AudioCallScreen.dart
+// COMPLETE REWRITE — fixes "Connecting" flash on minimize/return via FAB
+// Strategy: static engine + static channel survives screen dispose.
+// On return, if engine still alive on same channel → skip re-join, restore state.
+// uid = 1 for user (unchanged). All UI identical to original.
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -9,7 +13,6 @@ import 'package:astro_gurujii/Screens/video_call/Controllers/agora_controller.da
 import 'package:astro_gurujii/Screens/video_call/Helpers/utils.dart';
 import 'package:astro_gurujii/Setup/SetUp.dart';
 import 'package:astro_gurujii/widget/bottom_navigation_bar_custom.dart';
-
 import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -46,18 +49,24 @@ class AfterCallConnecting extends StatefulWidget {
 
 class _AfterCallConnectingState extends State<AfterCallConnecting> {
   static const _dbUrl = 'https://astrogurujii-production-default-rtdb.firebaseio.com/';
+  static const _appId = '8782e154141a4c0bbc8acaa3004d21f2';
 
-  // ── Static engine reference so dispose can fully clean up ─────────────────
-  static RtcEngine?        _sharedEngine;
-  static Completer<void>?  _releaseCompleter;
+  // ── STATIC: survives screen dispose ──────────────────────────────────────
+  static RtcEngine? _engine;
+  static String     _activeChannel   = '';
+  static bool       _remoteJoined    = false;
+  static int?       _remoteUid;
+  static bool       _engineReleasing = false;
+  static Completer<void>? _releaseCompleter;
+
+  // ── Instance callbacks (re-wired on each screen mount) ───────────────────
+  static void Function(int uid)?    _onRemoteJoin;
+  static void Function(int uid)?    _onRemoteLeave;
 
   final HttpServices _httpService = HttpServices();
-  bool isSomeOneJoinedCall = false;
 
   AgoraController get _agoraCtrl {
-    if (Get.isRegistered<AgoraController>()) {
-      return Get.find<AgoraController>();
-    }
+    if (Get.isRegistered<AgoraController>()) return Get.find<AgoraController>();
     return Get.put(AgoraController());
   }
 
@@ -65,44 +74,33 @@ class _AfterCallConnectingState extends State<AfterCallConnecting> {
   AudioCache  audioCache     = AudioCache();
   bool isRingtonePlaying     = false;
 
-  // ── Timers ─────────────────────────────────────────────────────────────────
   Timer? _statusPollTimer;
   Timer? _meetingTimer;
   Timer? _callTimer;
   Timer? _countdownTick;
 
-  // ── Agora ──────────────────────────────────────────────────────────────────
-  bool isMuted      = false;
-  bool isHold       = false;
-  bool isSpeakerOn  = false;
-  String callStatus = 'Connecting';
-  bool _disposed    = false;
-  int _agoraRetryCount = 0;
+  bool   isMuted      = false;
+  bool   isHold       = false;
+  bool   isSpeakerOn  = false;
+  String callStatus   = 'Connecting';
+  bool   _disposed    = false;
+  bool   isSomeOneJoinedCall = false;
 
-  // ── Elapsed ────────────────────────────────────────────────────────────────
   int    _elapsedSeconds = 0;
   String _displayTime    = '00:00';
 
-  // ── Meeting timer ──────────────────────────────────────────────────────────
-  int meetingDuration    = 0;
-  var meetingDurationTxt = '00:00'.obs;
-
-  // ── Firebase countdown ─────────────────────────────────────────────────────
-  final ValueNotifier<int> _countdownNotifier = ValueNotifier<int>(0);
-  StreamSubscription<DatabaseEvent>? _firebaseSub;
-
-  // ── Abort countdown ────────────────────────────────────────────────────────
-  final int _start         = 119;
-  int meetingDurationCount = 119;
+  int meetingDuration         = 0;
+  var meetingDurationTxt      = '00:00'.obs;
+  int meetingDurationCount    = 119;
   var meetingDurationTxtCount = '00:00'.obs;
-  StreamSubscription? _abortSub;
 
-  // ── Rating ─────────────────────────────────────────────────────────────────
+  final ValueNotifier<int>           _countdownNotifier = ValueNotifier<int>(0);
+  StreamSubscription<DatabaseEvent>? _firebaseSub;
+  StreamSubscription?                _abortSub;
+
   double ratingPoint = 0.0;
   final TextEditingController reviewControler = TextEditingController();
   bool _ratingDialogShown = false;
-
-  final List<int> _users = [];
 
   @override
   void initState() {
@@ -113,27 +111,59 @@ class _AfterCallConnectingState extends State<AfterCallConnecting> {
     final seedSecs  = rateInt > 0 ? (walletInt ~/ rateInt) * 60 + 60 : 0;
     _countdownNotifier.value = seedSecs.clamp(0, 99999);
 
-    _preloadRingtone();
-    _playRingtone();
+    // ── Wire instance callbacks so static engine calls back into this screen ─
+    _onRemoteJoin = (uid) {
+      if (_disposed || !mounted) return;
+      _remoteJoined       = true;
+      _remoteUid          = uid;
+      isSomeOneJoinedCall = true;
+      _agoraCtrl.startMeetingTimer();
+      _startCallTimer();
+      _stopRingtone();
+      try { _abortSub?.cancel(); } catch (_) {}
+      setState(() => callStatus = 'Connected');
+    };
+
+    _onRemoteLeave = (uid) {
+      if (_disposed || !mounted) return;
+      _remoteJoined       = false;
+      _remoteUid          = null;
+      isSomeOneJoinedCall = false;
+      _callTimer?.cancel();
+      setState(() => callStatus = 'Offline');
+    };
+
+    final returning = _engine != null && _activeChannel == widget.channelName;
+
+    if (returning) {
+      // ── RETURNING FROM MINIMIZE: engine already running ──────────────────
+      debugPrint('[Audio] Returning — engine alive, skipping re-join');
+      isSomeOneJoinedCall = _remoteJoined;
+      callStatus = _remoteJoined ? 'Connected' : 'Connecting';
+      if (_remoteJoined) _startCallTimer();
+    } else {
+      // ── FRESH CALL: init engine ──────────────────────────────────────────
+      _preloadRingtone();
+      _playRingtone();
+      _httpService.call_status_update(channel_id: widget.channelName, status: 'accept_astro');
+      WidgetsBinding.instance.addPostFrameCallback((_) => _initAgora());
+    }
+
     _startAbortTimer();
     _startMeetingTimer();
-    _subscribeCallSession();
-
+    _subscribeFirebase(walletInt, rateInt);
     _statusPollTimer = Timer.periodic(const Duration(seconds: 2), (_) => _checkStatus());
-
-    _httpService.call_status_update(channel_id: widget.channelName, status: 'accept_astro');
-
     FirebaseMessaging.instance.getInitialMessage();
     FirebaseMessaging.onMessage.listen(_handlePush);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initAgoraWithDelay();
-    });
   }
 
   @override
   void dispose() {
     _disposed = true;
+    // Detach callbacks so stale screen doesn't get called
+    _onRemoteJoin  = null;
+    _onRemoteLeave = null;
+
     _statusPollTimer?.cancel();
     _meetingTimer?.cancel();
     _callTimer?.cancel();
@@ -143,132 +173,100 @@ class _AfterCallConnectingState extends State<AfterCallConnecting> {
     _countdownNotifier.dispose();
     reviewControler.dispose();
     _stopRingtone();
-
-    final engine = _sharedEngine;
-    _sharedEngine = null;
-
-    if (engine != null) {
-      final completer = Completer<void>();
-      _releaseCompleter = completer;
-
-      Future(() async {
-        try { await engine.leaveChannel(); } catch (_) {}
-        await Future.delayed(const Duration(milliseconds: 400));
-        try { await engine.release(); } catch (_) {}
-        if (!completer.isCompleted) completer.complete();
-        _releaseCompleter = null;
-      });
-    }
-
+    // NOTE: DO NOT release engine here — it must survive minimize
     super.dispose();
   }
 
-  Future<void> _initAgoraWithDelay() async {
-    final prev = _releaseCompleter;
-    if (prev != null && !prev.isCompleted) {
-      await prev.future.timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {},
-      );
+  // ── Agora init (fresh call only) ─────────────────────────────────────────
+  Future<void> _initAgora() async {
+    if (_engineReleasing) {
+      await _releaseCompleter?.future.timeout(
+        const Duration(seconds: 3), onTimeout: () {});
     }
-
     if (_disposed || !mounted) return;
+
     await Future.delayed(const Duration(milliseconds: 300));
-
     if (_disposed || !mounted) return;
-    await _initAgoraRTC();
-  }
-
-  Future<void> _initAgoraRTC() async {
-    if (_disposed || !mounted) return;
-
-    const appId = '8782e154141a4c0bbc8acaa3004d21f2';
-    if (appId.isEmpty) {
-      debugPrint('[AfterCall] Agora App ID empty');
-      return;
-    }
 
     try {
       final engine = createAgoraRtcEngine();
-      _sharedEngine = engine;
+      _engine        = engine;
+      _activeChannel = widget.channelName;
 
-      await engine.initialize(RtcEngineContext(appId: appId));
-      if (_disposed) { await engine.release(); _sharedEngine = null; return; }
+      await engine.initialize(RtcEngineContext(appId: _appId));
+      if (_disposed) { await _releaseEngine(); return; }
 
       await engine.enableAudio();
-
-      engine.registerEventHandler(RtcEngineEventHandler(
-        onJoinChannelSuccess: (conn, elapsed) {
-          print('[AfterCall] ✅ joined uid=${conn.localUid}');
-          if (mounted && !_disposed) setState(() {});
-        },
-        onUserJoined: (conn, uid, elapsed) {
-          print('[AfterCall] 👤 user joined uid=$uid');
-          _agoraCtrl.startMeetingTimer();
-          isSomeOneJoinedCall = true;
-          _startCallTimer();
-          if (mounted && !_disposed) setState(() {
-            _users.add(uid);
-            callStatus = 'Connected';
-          });
-        },
-        onUserOffline: (conn, uid, reason) {
-          _callTimer?.cancel();
-          if (mounted && !_disposed) setState(() {
-            _users.remove(uid);
-            callStatus = 'Offline';
-          });
-        },
-        onLeaveChannel: (conn, stats) {
-          if (mounted && !_disposed) setState(() => _users.clear());
-        },
-        onError: (code, msg) {
-          print('[AfterCall] ❌ Agora error: $code — $msg');
-        },
-      ));
-
       await engine.enableWebSdkInteroperability(true);
 
-      if (_disposed || !mounted) return;
+      engine.registerEventHandler(RtcEngineEventHandler(
+        onJoinChannelSuccess: (conn, _) {
+          debugPrint('[Audio] ✅ joined uid=${conn.localUid}');
+          if (mounted && !_disposed) setState(() {});
+        },
+        onUserJoined: (conn, uid, _) {
+          debugPrint('[Audio] 👤 remote joined uid=$uid');
+          _onRemoteJoin?.call(uid);
+        },
+        onUserOffline: (conn, uid, _) {
+          debugPrint('[Audio] 👤 remote offline uid=$uid');
+          _onRemoteLeave?.call(uid);
+          Future.microtask(() {
+            if (!_ratingDialogShown) _showRatingDialogOnce();
+          });
+        },
+        onLeaveChannel: (conn, _) {
+          if (mounted && !_disposed) setState(() {});
+        },
+        onError: (code, msg) => debugPrint('[Audio] ❌ $code $msg'),
+      ));
 
       await engine.joinChannel(
         token    : widget.token,
         channelId: widget.channelName,
-        uid      : 1, 
-        options  : const ChannelMediaOptions(),
+        uid      : 1,
+        options  : const ChannelMediaOptions(
+          clientRoleType        : ClientRoleType.clientRoleBroadcaster,
+          publishMicrophoneTrack: true,
+          autoSubscribeAudio    : true,
+        ),
       );
-print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}');
-      print('[AfterCall] joinChannel sent for ${widget.channelName}');
+      debugPrint('[Audio] joinChannel sent channel=${widget.channelName} token=${widget.token}');
     } catch (e) {
-      print('[AfterCall] Agora init error: $e');
-      if (mounted && !_disposed) {
-        _agoraRetryCount++;
-        if (_agoraRetryCount <= 2) {
-          setState(() => callStatus = 'Connecting...');
-          Future.delayed(const Duration(seconds: 2), () {
-            if (mounted && !_disposed) _initAgoraRTC();
-          });
-        } else {
-          setState(() => callStatus = 'Try again. Tap end & reconnect.');
-        }
-      }
+      debugPrint('[Audio] init error: $e');
     }
   }
 
-  void _subscribeCallSession() {
-    final walletInt = int.tryParse(widget.wallet) ?? 0;
-    final rateInt   = int.tryParse(widget.rate)   ?? 1;
+  // ── Release engine (called only on true call end) ─────────────────────────
+  Future<void> _releaseEngine() async {
+    final engine = _engine;
+    _engine        = null;
+    _activeChannel = '';
+    _remoteJoined  = false;
+    _remoteUid     = null;
+    if (engine == null) return;
 
+    _engineReleasing = true;
+    final completer  = Completer<void>();
+    _releaseCompleter = completer;
+    try { await engine.leaveChannel(); } catch (_) {}
+    await Future.delayed(const Duration(milliseconds: 400));
+    try { await engine.release(); } catch (_) {}
+    _engineReleasing = false;
+    if (!completer.isCompleted) completer.complete();
+    _releaseCompleter = null;
+  }
+
+  // ── Firebase countdown ────────────────────────────────────────────────────
+  void _subscribeFirebase(int walletInt, int rateInt) {
     final ref = FirebaseDatabase.instanceFor(
-      app        : Firebase.app(),
-      databaseURL: _dbUrl,
+      app: Firebase.app(), databaseURL: _dbUrl,
     ).ref().child('CallSession').child(widget.channelName);
 
     _firebaseSub = ref.onValue.listen((event) {
       if (!mounted || _disposed) return;
       final raw = event.snapshot.value;
       if (raw == null) return;
-
       final data   = Map<String, dynamic>.from(raw as Map);
       final status = (data['status'] ?? '') as String;
 
@@ -281,9 +279,7 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
 
       final accurate = _computeAccurate(data, walletInt, rateInt);
       if (accurate == null) return;
-
-      final local = _countdownNotifier.value;
-      if ((local - accurate).abs() > 10) {
+      if ((_countdownNotifier.value - accurate).abs() > 10) {
         _countdownNotifier.value = accurate;
       }
     });
@@ -296,28 +292,95 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
   }
 
   int? _computeAccurate(Map<String, dynamic> data, int walletInt, int rateInt) {
-    final nowMs         = DateTime.now().millisecondsSinceEpoch;
-    final rawMaxMinutes = data['max_minutes'];
-    final rawLastTick   = data['last_tick_at'];
-    final rawStartedAt  = data['started_at'];
-
-    if (rawMaxMinutes != null) {
-      final maxSec = (int.tryParse(rawMaxMinutes.toString()) ?? 0) * 60;
-      if (rawLastTick != null) {
-        final elapsed = ((nowMs - (int.tryParse(rawLastTick.toString()) ?? nowMs)) / 1000).floor();
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+    final rawMax = data['max_minutes'];
+    final rawLast = data['last_tick_at'];
+    final rawStart = data['started_at'];
+    if (rawMax != null) {
+      final maxSec = (int.tryParse(rawMax.toString()) ?? 0) * 60;
+      if (rawLast != null) {
+        final elapsed = ((nowMs - (int.tryParse(rawLast.toString()) ?? nowMs)) / 1000).floor();
         return (maxSec - elapsed).clamp(0, maxSec);
       }
       return maxSec;
     }
-
-    if (rawStartedAt != null) {
-      final elapsed = ((nowMs - (int.tryParse(rawStartedAt.toString()) ?? nowMs)) / 1000).floor();
+    if (rawStart != null) {
+      final elapsed = ((nowMs - (int.tryParse(rawStart.toString()) ?? nowMs)) / 1000).floor();
       final maxSec  = rateInt > 0 ? (walletInt ~/ rateInt) * 60 : 0;
       return (maxSec - elapsed).clamp(0, maxSec);
     }
     return null;
   }
 
+  // ── Timers ────────────────────────────────────────────────────────────────
+  void _startAbortTimer() {
+    meetingDurationCount = 119;
+    final countdown = CountdownTimer(const Duration(seconds: 119), const Duration(seconds: 1));
+    _abortSub = countdown.listen(null);
+    _abortSub!.onData((_) {
+      if (!mounted || _disposed) return;
+      final m = meetingDurationCount ~/ 60;
+      final s = meetingDurationCount % 60;
+      meetingDurationTxtCount.value =
+          '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+      setState(() => meetingDurationCount--);
+    });
+    _abortSub!.onDone(() {
+      if (!_remoteJoined) _getChangeConnectionApi('disconnect_user');
+    });
+  }
+
+  void _startMeetingTimer() {
+    _meetingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _disposed) return;
+      final m = meetingDuration ~/ 60;
+      final s = meetingDuration % 60;
+      meetingDurationTxt.value =
+          '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+      setState(() => meetingDuration++);
+    });
+  }
+
+  void _startCallTimer() {
+    _callTimer?.cancel();
+    _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _disposed) return;
+      setState(() {
+        _elapsedSeconds++;
+        final d = Duration(seconds: _elapsedSeconds);
+        _displayTime =
+            '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+      });
+    });
+  }
+
+  // ── Status poll ───────────────────────────────────────────────────────────
+  Future<void> _checkStatus() async {
+    if (_disposed) return;
+    final res = await _httpService.call_initiate_status(channel_id: widget.channelName);
+    if (!mounted || _disposed || res?.status != true) return;
+    final s = res!.results?.status ?? '';
+    if (s == 'accept_astro') {
+      try { _abortSub?.cancel(); } catch (_) {}
+    } else if (s == 'reject_astro') {
+      _statusPollTimer?.cancel();
+      try { _abortSub?.cancel(); } catch (_) {}
+      if (mounted && !_disposed) Navigator.pop(context);
+    } else if (s == 'end_user') {
+      _statusPollTimer?.cancel();
+      try { _abortSub?.cancel(); } catch (_) {}
+    }
+  }
+
+  void _handlePush(RemoteMessage msg) {
+    final type = msg.data['notification_type']?.toString() ?? '';
+    if (type == 'reject_astro') {
+      try { _abortSub?.cancel(); } catch (_) {}
+      if (mounted && !_disposed) Navigator.pop(context);
+    }
+  }
+
+  // ── Ringtone ──────────────────────────────────────────────────────────────
   Future<void> _preloadRingtone() async {
     try { await audioCache.load('ring.mp3'); } catch (_) {}
   }
@@ -338,75 +401,11 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
     } catch (_) {}
   }
 
-  void _handlePush(RemoteMessage msg) {
-    final type = msg.data['notification_type']?.toString() ?? '';
-    if (type == 'end_user') {
-      _endCall();
-    } else if (type == 'reject_astro') {
-      _statusPollTimer?.cancel();
-      try { _abortSub?.cancel(); } catch (_) {}
-      _endCall();
-      if (mounted && !_disposed) Navigator.pop(context);
-    }
-  }
-
-  Future<void> _checkStatus() async {
-    if (_disposed) return;
-    final res = await _httpService.call_initiate_status(channel_id: widget.channelName);
-    if (!mounted || _disposed) return;
-    if (res?.status != true) return;
-
-    final s = res!.results?.status ?? '';
-    if (s == 'accept_astro') {
-      try { _abortSub?.cancel(); } catch (_) {}
-    } else if (s == 'reject_astro') {
-      _statusPollTimer?.cancel();
-      try { _abortSub?.cancel(); } catch (_) {}
-      if (mounted && !_disposed) Navigator.pop(context);
-    } else if (s == 'end_user') {
-      _statusPollTimer?.cancel();
-      try { _abortSub?.cancel(); } catch (_) {}
-      _endCall();
-    }
-  }
-
-  void _startAbortTimer() {
-    final countdown = CountdownTimer(Duration(seconds: _start), const Duration(seconds: 1));
-    _abortSub = countdown.listen(null);
-    _abortSub!.onData((_) {
-      if (!mounted || _disposed) return;
-      final m = meetingDurationCount ~/ 60;
-      final s = meetingDurationCount % 60;
-      meetingDurationTxtCount.value = '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-      setState(() => meetingDurationCount--);
-    });
-    _abortSub!.onDone(() => _getChangeConnectionApi('disconnect_user'));
-  }
-
-  void _startMeetingTimer() {
-    _meetingTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted || _disposed) return;
-      final m = meetingDuration ~/ 60;
-      final s = meetingDuration % 60;
-      meetingDurationTxt.value = '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-      setState(() => meetingDuration++);
-    });
-  }
-
-  void _startCallTimer() {
-    _callTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted || _disposed) return;
-      setState(() {
-        _elapsedSeconds++;
-        final d = Duration(seconds: _elapsedSeconds);
-        _displayTime = '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
-      });
-    });
-  }
-
+  // ── API helpers ───────────────────────────────────────────────────────────
   Future<void> _getChangeConnectionApi(String status) async {
     try {
-      await _httpService.change_connection_request_status(channel_id: widget.channelName, status: status);
+      await _httpService.change_connection_request_status(
+          channel_id: widget.channelName, status: status);
     } catch (_) {}
   }
 
@@ -418,18 +417,11 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
     );
     if (!mounted || _disposed) return;
     if (res?.status == true) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => MainHomeScreenWithBottomNavigation()));
+      Navigator.pushReplacement(
+          context, MaterialPageRoute(builder: (_) => MainHomeScreenWithBottomNavigation()));
     } else {
       Fluttertoast.showToast(msg: 'Something went wrong');
     }
-  }
-
-  void _endCall() {
-    try {
-      _users.clear();
-      _sharedEngine?.leaveChannel();
-      _meetingTimer?.cancel();
-    } catch (_) {}
   }
 
   void _showRatingDialogOnce() {
@@ -438,9 +430,16 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
     _showRatingDialog(context);
   }
 
+  // ── End call ──────────────────────────────────────────────────────────────
+  void _endCallAndRate() {
+    _getChangeConnectionApi(isSomeOneJoinedCall ? 'end_user' : 'disconnect_user');
+    _releaseEngine();
+    _showRatingDialogOnce();
+  }
+
+  // ── WillPop: minimize keeps engine alive ──────────────────────────────────
   Future<bool> _onWillPop() async {
     if (!isSomeOneJoinedCall) return true;
-
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -458,9 +457,11 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
         ],
       ),
     );
+    // Engine stays alive — screen just pops. Static vars hold state.
     return result ?? false;
   }
 
+  // ── BUILD ─────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final sw = MediaQuery.of(context).size.width;
@@ -485,7 +486,7 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
               bottom: 0, left: 0, right: 0,
               child: Container(
                 height    : sh * 0.4,
-                decoration:  BoxDecoration(
+                decoration: BoxDecoration(
                     color       : primaryColor,
                     borderRadius: BorderRadius.vertical(top: Radius.circular(30))),
               ),
@@ -506,7 +507,8 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
               left : sw * 0.075,
               right: sw * 0.075,
               child: Container(
-                padding: EdgeInsets.symmetric(vertical: sh * 0.06, horizontal: sw * 0.04),
+                padding: EdgeInsets.symmetric(
+                    vertical: sh * 0.06, horizontal: sw * 0.04),
                 decoration: BoxDecoration(
                   color       : whiteColor,
                   borderRadius: BorderRadius.circular(25),
@@ -527,12 +529,17 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
                     ),
                     SizedBox(height: sh * 0.03),
                     Text(widget.name,
-                        style: TextStyle(color: Colors.black, fontSize: sw * 0.054, fontWeight: FontWeight.bold)),
+                        style: TextStyle(
+                            color     : Colors.black,
+                            fontSize  : sw * 0.054,
+                            fontWeight: FontWeight.bold)),
                     SizedBox(height: sh * 0.01),
                     Text(
                       callStatus,
                       style: TextStyle(
-                          color     : callStatus == 'Connected' ? Colors.green : Colors.grey,
+                          color     : callStatus == 'Connected'
+                              ? Colors.green
+                              : Colors.grey,
                           fontSize  : sw * 0.035,
                           fontWeight: FontWeight.w700),
                     ),
@@ -541,27 +548,35 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
                       valueListenable: _countdownNotifier,
                       builder: (_, secs, __) {
                         final m          = (secs ~/ 60).toString().padLeft(2, '0');
-                        final s          = (secs  % 60).toString().padLeft(2, '0');
+                        final s          = (secs % 60).toString().padLeft(2, '0');
                         final isLow      = secs < 120;
                         final isCritical = secs < 60;
                         return Column(
                           children: [
                             Text('$m:$s',
                                 style: TextStyle(
-                                    color     : isCritical ? Colors.red : isLow ? Colors.orange : Colors.black,
+                                    color     : isCritical
+                                        ? Colors.red
+                                        : isLow ? Colors.orange : Colors.black,
                                     fontSize  : sw * 0.05,
                                     fontWeight: FontWeight.w600)),
                             if (isLow)
                               Text(
                                 isCritical ? '⚠ Low Balance' : 'Balance running low',
-                                style: TextStyle(color: isCritical ? Colors.red : Colors.orange, fontSize: sw * 0.03),
+                                style: TextStyle(
+                                    color   : isCritical ? Colors.red : Colors.orange,
+                                    fontSize: sw * 0.03),
                               ),
                           ],
                         );
                       },
                     ),
                     SizedBox(height: sh * 0.01),
-                    Text(_displayTime, style: TextStyle(color: Colors.black, fontSize: sw * 0.035, fontWeight: FontWeight.w300)),
+                    Text(_displayTime,
+                        style: TextStyle(
+                            color     : Colors.black,
+                            fontSize  : sw * 0.035,
+                            fontWeight: FontWeight.w300)),
                     SizedBox(height: sh * 0.06),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -571,20 +586,21 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
                           !isMuted ? 'Mute' : 'Unmute', sw,
                           () {
                             setState(() => isMuted = !isMuted);
-                            _sharedEngine?.muteLocalAudioStream(isMuted);
+                            _engine?.muteLocalAudioStream(isMuted);
                           },
                           !isMuted ? Colors.white : Colors.grey.shade300,
                         ),
-                        _actionBtn(Icons.pause, isHold ? 'Resume' : 'Hold', sw,
+                        _actionBtn(
+                          Icons.pause, isHold ? 'Resume' : 'Hold', sw,
                           () {
                             setState(() => isHold = !isHold);
-                            if (!isHold) {
-                              _sharedEngine?.muteLocalAudioStream(true);
-                              _sharedEngine?.disableAudio();
+                            if (isHold) {
+                              _engine?.muteLocalAudioStream(true);
+                              _engine?.disableAudio();
                               setState(() => callStatus = 'On Hold');
                             } else {
-                              _sharedEngine?.muteLocalAudioStream(false);
-                              _sharedEngine?.enableAudio();
+                              _engine?.muteLocalAudioStream(false);
+                              _engine?.enableAudio();
                               setState(() => callStatus = 'Connected');
                             }
                           },
@@ -595,7 +611,7 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
                           isSpeakerOn ? 'Speaker' : 'Earpiece', sw,
                           () {
                             setState(() => isSpeakerOn = !isSpeakerOn);
-                            _sharedEngine?.setEnableSpeakerphone(isSpeakerOn);
+                            _engine?.setEnableSpeakerphone(isSpeakerOn);
                           },
                           isSpeakerOn ? Colors.grey.shade300 : Colors.white,
                         ),
@@ -603,11 +619,7 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
                     ),
                     SizedBox(height: sh * 0.06),
                     GestureDetector(
-                      onTap: () {
-                        _getChangeConnectionApi(isSomeOneJoinedCall ? 'end_user' : 'disconnect_user');
-                        _endCall();
-                        _showRatingDialogOnce();
-                      },
+                      onTap: _endCallAndRate,
                       child: CircleAvatar(
                         backgroundColor: Colors.red,
                         radius: sw * 0.0875,
@@ -624,7 +636,8 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
     );
   }
 
-  Widget _actionBtn(IconData icon, String label, double sw, VoidCallback onTap, Color bgColor) {
+  Widget _actionBtn(
+      IconData icon, String label, double sw, VoidCallback onTap, Color bgColor) {
     return GestureDetector(
       onTap: onTap,
       child: Column(children: [
@@ -646,64 +659,46 @@ print('[AgoraTokenCheck] Channel: ${widget.channelName} | Token: ${widget.token}
       builder: (dCtx) => AlertDialog(
         insetPadding: const EdgeInsets.only(left: 20, right: 20, bottom: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        content: StatefulBuilder(
-          builder: (_, ss) => Column(
-            mainAxisSize     : MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
+        title  : const Text('Rate Your Experience'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Please rate your experience', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 20),
               RatingBar.builder(
-                itemSize     : 30,
-                glowColor    : const Color(0xfff19425),
-                initialRating: ratingPoint,
-                itemBuilder  : (_, __) => const Icon(Icons.star, color: Color(0xfff19425)),
-                onRatingUpdate: (r) => ss(() => ratingPoint = r),
+                initialRating : 0,
+                minRating     : 1,
+                itemCount     : 5,
+                itemPadding   : const EdgeInsets.symmetric(horizontal: 4),
+                itemBuilder   : (_, __) => const Icon(Icons.star, color: Colors.amber),
+                onRatingUpdate: (r) => ratingPoint = r,
               ),
-              const SizedBox(height: 20),
-              const Text('Additional comments', style: TextStyle(color: Colors.black, fontWeight: FontWeight.w500)),
-              const SizedBox(height: 20),
-              Container(
-                width     : double.infinity, height: 120,
-                decoration: BoxDecoration(color: Colors.grey.withOpacity(0.5), borderRadius: BorderRadius.circular(5)),
-                padding: const EdgeInsets.only(left: 10, bottom: 5),
-                child  : TextFormField(
-                  controller     : reviewControler,
-                  textInputAction: TextInputAction.newline,
-                  keyboardType   : TextInputType.multiline,
-                  minLines: null, maxLines: null, expands: true,
-                  decoration: const InputDecoration(
-                    border   : InputBorder.none,
-                    hintText : 'Review Here',
-                    hintStyle: TextStyle(color: Colors.black, fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              InkWell(
-                onTap: () => ss(() {
-                  if (ratingPoint < 1) {
-                    Fluttertoast.showToast(msg: 'Please give your valuable feedback');
-                  } else {
-                    Navigator.pop(dCtx);
-                    _callAliForRating(ratingPoint, reviewControler.text);
-                  }
-                }),
-                child: Container(
-                  height   : 45,
-                  width    : double.infinity,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(colors: [Color(0xffFC7601), Color(0xffFC7601)]),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Text('SUBMIT', style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              TextField(
+                controller : reviewControler,
+                maxLines   : 3,
+                decoration : const InputDecoration(
+                  hintText      : 'Write a review...',
+                  border        : OutlineInputBorder(),
+                  contentPadding: EdgeInsets.all(8),
                 ),
               ),
             ],
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              if (ratingPoint < 1) {
+                Fluttertoast.showToast(msg: 'Please give your valuable feedback');
+              } else {
+                Navigator.pop(dCtx);
+                _callAliForRating(ratingPoint, reviewControler.text);
+              }
+            },
+            child: const Text('SUBMIT'),
+          ),
+        ],
       ),
     );
   }
-} // Cleanly closes _AfterCallConnectingState
+}

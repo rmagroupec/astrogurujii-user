@@ -55,6 +55,7 @@ class MyApp extends StatelessWidget {
           ChangeNotifierProvider(
             create: (context) => Products(),
           ),
+          
         ],
         child: GetMaterialApp(
             debugShowCheckedModeBanner: false,

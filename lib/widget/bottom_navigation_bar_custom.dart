@@ -11,6 +11,8 @@
 //  6. dispose() cancels poll timer + Firebase subscription.
 //  7. _ratingDialogShown guard prevents double-dialog on status change.
 
+
+import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:async';
 import 'package:astro_gurujii/Screens/video_call/AudioCallScreen.dart';
 import 'package:astro_gurujii/Screens/video_call/NewVideoCallScreen.dart';
@@ -80,7 +82,7 @@ class BottomNavigationBarCustom extends StatelessWidget {
         children: [
           _navItem('assets/d_icons/new_home_icon.png', 'Home',  onHomeTap,  activeIndex == 0),
           _navItem('assets/d_icons/chat_icon.png',     'Chat',  onChatTap,  activeIndex == 1),
-          _liveItem(                                   'Live',  onLiveTap,  activeIndex == 2),
+          _liveItem(  'assets/images/live.svg' ,                                'Live',  onLiveTap,  activeIndex == 2),
           _navItem('assets/d_icons/new_call_icon.png', 'Call',  onCallTap,  activeIndex == 3),
           _navItem('assets/d_icons/active_pooja_icon.png', 'Puja', onPoojaTap, activeIndex == 4),
         ],
@@ -103,20 +105,26 @@ class BottomNavigationBarCustom extends StatelessWidget {
     );
   }
 
-  Widget _liveItem(String label, Function onTap, bool active) {
-    final color = active ? activeColor : inactiveColor;
-    return InkWell(
-      onTap: () => onTap(),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.live_tv, color: color, size: 25),
-          const SizedBox(height: 3),
-          Text(label, style: TextStyle(color: color, fontSize: 12)),
-        ],
-      ),
-    );
-  }
+
+Widget _liveItem(String iconPath, String label, Function onTap, bool active) {
+  final color = active ? activeColor : inactiveColor;
+  return InkWell(
+    onTap: () => onTap(),
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        SvgPicture.asset(
+          iconPath,
+          width: 15,
+          colorFilter: ColorFilter.mode(color, BlendMode.srcIn),
+          fit: BoxFit.contain,
+        ),
+        const SizedBox(height: 3),
+        Text(label, style: TextStyle(color: color, fontSize: 12)),
+      ],
+    ),
+  );
+}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -354,115 +362,97 @@ class _MainHomeScreenWithBottomNavigationState
     _subscribedChannelId = null;
   }
 
+Future<void> _returnToActiveChat() async {
+  final res = await _httpServices.lastCallList();
+  if (!mounted) return;
+  if (res?.result != true || res?.data2 == null) return;
+
+  final d = res!.data2!;
+  if (d.status != 'accept_astro') return;
+
+  await Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => Chat(
+        channelID          : d.fbChannelId ?? d.channelId ?? '',
+        fbchannelID        : d.channelId   ?? '',
+        gid                : d.channelId   ?? '',
+        astrologerId       : d.astroId     ?? '',
+        astroName          : d.astroName   ?? '',
+        astrologerImage    : d.astroProfileImg ?? '',
+        astrologerChatRate : d.callRate    ?? '0',
+        wallet             : ((d.difference ?? 0) * (int.tryParse(d.callRate ?? '1') ?? 1))
+                                 .toString(),
+        name               : d.userName    ?? '',
+        gender             : '',
+        dob                : '',
+        tob                : '',
+        place              : '',
+        currency           : 'INR',
+      ),
+    ),
+  );
+  _getChatStatus();
+}
   // ─────────────────────────────────────────────────────────────────────────
   // Navigate BACK into an active chat
   // ─────────────────────────────────────────────────────────────────────────
-  Future<void> _returnToActiveChat() async {
-    // Re-fetch to get the freshest data before navigating
+ Future<void> _returnToActiveAudioCall() async {
     final res = await _httpServices.lastCallList();
     if (!mounted) return;
     if (res?.result != true || res?.data2 == null) return;
-
+ 
     final d = res!.data2!;
     if (d.status != 'accept_astro') return;
-
-    await Navigator.push(
-  context,
-  MaterialPageRoute(
-    builder: (_) => Chat(
-      channelID          : d.fbChannelId ?? d.channelId ?? '',  // fb_channel_id (legacy)
-      fbchannelID        : d.channelId   ?? '',                  // API channel_id
-      gid                : d.channelId   ?? '',                  // ✅ FIX: was d.fbChannelId
-      astrologerId       : d.astroId     ?? '',
-      astroName          : d.astroName   ?? '',
-      astrologerImage    : d.astroProfileImg ?? '',
-      astrologerChatRate : d.callRate    ?? '0',
-      wallet             : ((d.difference ?? 0) * (int.tryParse(d.callRate ?? '1') ?? 1))
-                               .toString(),
-      name               : d.userName    ?? '',
-      gender : '',
-      dob    : '',
-      tob    : '',
-      place  : '',
-      currency: 'INR',
-    ),
-  ),
-);
-    _getChatStatus();
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Navigate BACK into an active audio call
-  // ─────────────────────────────────────────────────────────────────────────
-  Future<void> _returnToActiveAudioCall() async {
-    final res = await _httpServices.lastCallList();
-    if (!mounted) return;
-    if (res?.result != true || res?.data2 == null) return;
-
-    final d = res!.data2!;
-    if (d.status != 'accept_astro') return;
-
-    // We pull the difference directly from the API response (just like your React code)
-    final elapsedSeconds = d.difference ?? 0;
-    print("[Restoration] Restoring active audio call. Elapsed seconds: $elapsedSeconds");
-
+ 
     final walletProxy =
         ((d.difference ?? 0) * (int.tryParse(d.callRate ?? '1') ?? 1))
             .toString();
-
+ 
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => AfterCallConnecting(
-          channelName: d.channelId ?? '',
-          name       : d.astroName   ?? '',
+          channelName: d.channelId      ?? '',
+          name       : d.astroName      ?? '',
           profile    : d.astroProfileImg ?? '',
-          callfrom   : d.userName ?? '',
-          // ✅ CRITICAL INTERACTION FIX:
-          // Since we aren't creating a new token, we must pass the existing 
-          // token string saved in your system layout if available. 
-          // If your backend lastCallList() does not save the running token token, 
-          // you can pass "0" or your wildcard profile parameter.
-          token      : d.channelId ?? '', 
+          callfrom   : d.userName       ?? '',
+          token      : '',   // engine already running — token not used
           wallet     : walletProxy,
-          rate       : d.callRate    ?? '1',
+          rate       : d.callRate       ?? '1',
         ),
       ),
     );
     _getChatStatus();
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Navigate BACK into an active video call
-  // ─────────────────────────────────────────────────────────────────────────
+ 
   Future<void> _returnToActiveVideoCall() async {
     final res = await _httpServices.lastCallList();
     if (!mounted) return;
     if (res?.result != true || res?.data2 == null) return;
-
+ 
     final d = res!.data2!;
     if (d.status != 'accept_astro') return;
-
+ 
     final walletProxy =
         ((d.difference ?? 0) * (int.tryParse(d.callRate ?? '1') ?? 1))
             .toString();
-
+ 
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => VideoCallScreen(
-          channelName: d.channelId   ?? '',
-          name       : d.astroName   ?? '',
+          channelName: d.channelId      ?? '',
+          name       : d.astroName      ?? '',
           profile    : d.astroProfileImg ?? '',
-          token      : '',
+          token      : '',   // engine already running — token not used
           wallet     : walletProxy,
-          rate       : d.callRate    ?? '1',
+          rate       : d.callRate       ?? '1',
         ),
       ),
     );
     _getChatStatus();
   }
-
   // ─────────────────────────────────────────────────────────────────────────
   // Floating card builder — decides which card to show
   // ─────────────────────────────────────────────────────────────────────────

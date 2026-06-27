@@ -1,36 +1,26 @@
 // lib/Screens/video_call/ActiveCallService.dart
 //
-// Flutter equivalent of the web AudioCallContext + Agora client ref.
+// Singleton that keeps the Agora RtcEngine alive while the call screen is
+// minimized so that returning via the FAB does NOT trigger a re-join
+// (which previously caused "Connecting" to flash).
 //
-// WEB PATTERN (React):
-//   - AudioCallContext holds Agora IAgoraRTCClient in a ref
-//   - minimize() just navigates back — does NOT leave channel
-//   - Returning to screen: reads existing client from context, no re-join
+// TWO USAGE PATTERNS:
 //
-// FLUTTER PROBLEM:
-//   - AfterCallConnecting.dispose() releases the Agora engine
-//   - New screen instance must re-joinChannel → requires fresh token
-//   - Token fetch + join introduces delay → shows "Connecting" again
+// A) Service-managed (original): service creates and owns the engine.
+//      await ActiveCallService.instance.initAndJoin(...);
+//      ActiveCallService.instance.minimize();   // on back press
+//      ActiveCallService.instance.rewire(...);  // on screen return
+//      await ActiveCallService.instance.endCall();
 //
-// FLUTTER SOLUTION (this file):
-//   - ActiveCallService singleton holds the RtcEngine
-//   - AfterCallConnecting uses this service instead of creating its own engine
-//   - On minimize (back press): engine stays alive in service
-//   - On return: screen re-wires event handlers, does NOT re-join
-//   - Engine is only released when call truly ends (end_user / end_astro)
-//
-// USAGE:
-//   // Start call (first time):
-//   await ActiveCallService.instance.initAndJoin(channelId, token, onUserJoined, onUserOffline);
-//
-//   // Minimize (back from screen — DON'T call dispose on screen):
-//   ActiveCallService.instance.minimize();
-//
-//   // Return to screen:
-//   ActiveCallService.instance.rewire(onUserJoined, onUserOffline, onError);
-//
-//   // End call:
-//   await ActiveCallService.instance.endCall();
+// B) Screen-managed (new — used by AudioCallScreen & NewVideoCallScreen):
+//    The screen creates the engine itself (existing code unchanged).
+//    After joinChannel succeeds, the screen registers it here:
+//      ActiveCallService.instance.trackExternalEngine(engine, channelId, ...);
+//    On minimize, the screen sets _engineHandedOff = true so dispose() skips release.
+//    On screen return, the rewire path is used — no re-join needed.
+//      ActiveCallService.instance.rewire(...);
+//    On true call end:
+//      await ActiveCallService.instance.endCall();
 
 import 'dart:async';
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
@@ -50,8 +40,11 @@ class ActiveCallService {
   // ── Engine ─────────────────────────────────────────────────────────────────
   RtcEngine? _engine;
   bool       _joined    = false;
-  bool       _isActive  = false;  // true while call is live
+  bool       _isActive  = false;
   String     _channelId = '';
+
+  // ── Whether we own the engine (true) or it's screen-managed (false) ────────
+  bool _ownsEngine = true;
 
   // ── Connected remote users ─────────────────────────────────────────────────
   final List<int> remoteUsers = [];
@@ -63,14 +56,14 @@ class ActiveCallService {
   OnCallError?    _onError;
 
   // ── Public getters ─────────────────────────────────────────────────────────
-  RtcEngine? get engine    => _engine;
-  bool       get isActive  => _isActive;
-  bool       get isJoined  => _joined;
-  String     get channelId => _channelId;
+  RtcEngine? get engine       => _engine;
+  bool       get isActive     => _isActive;
+  bool       get isJoined     => _joined;
+  String     get channelId    => _channelId;
   bool       get hasRemoteUser => remoteUsers.isNotEmpty;
 
   // ─────────────────────────────────────────────────────────────────────────
-  // initAndJoin — called ONCE when call first starts
+  // initAndJoin — called ONCE when call first starts (pattern A)
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> initAndJoin({
     required String         channelId,
@@ -79,7 +72,7 @@ class ActiveCallService {
     required OnRemoteLeft   onRemoteLeft,
     OnJoinSuccess?          onJoinSuccess,
     OnCallError?            onError,
-    int                     uid = 2,
+    int                     uid = 1,
   }) async {
     // If already active on same channel, just rewire
     if (_isActive && _channelId == channelId && _engine != null) {
@@ -93,11 +86,11 @@ class ActiveCallService {
       return;
     }
 
-    // Clean up any previous session
     await _release();
 
     _channelId      = channelId;
     _isActive       = true;
+    _ownsEngine     = true;
     _onRemoteJoined = onRemoteJoined;
     _onRemoteLeft   = onRemoteLeft;
     _onJoinSuccess  = onJoinSuccess;
@@ -136,6 +129,34 @@ class ActiveCallService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // trackExternalEngine — pattern B
+  // Called by AudioCallScreen / NewVideoCallScreen AFTER they have already
+  // created their own engine and called joinChannel successfully.
+  // The service takes a reference so that minimize/rewire work, but does NOT
+  // release/destroy this engine (the screen still owns it for the call end).
+  // ─────────────────────────────────────────────────────────────────────────
+  void trackExternalEngine({
+    required RtcEngine      engine,
+    required String         channelId,
+    required OnRemoteJoined onRemoteJoined,
+    required OnRemoteLeft   onRemoteLeft,
+    OnJoinSuccess?          onJoinSuccess,
+    OnCallError?            onError,
+  }) {
+    _engine         = engine;
+    _channelId      = channelId;
+    _isActive       = true;
+    _joined         = true;
+    _ownsEngine     = false; // screen manages engine lifecycle
+    _onRemoteJoined = onRemoteJoined;
+    _onRemoteLeft   = onRemoteLeft;
+    _onJoinSuccess  = onJoinSuccess;
+    _onError        = onError;
+    remoteUsers.clear();
+    debugPrint('[ActiveCallService] 📌 tracking external engine for $channelId');
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // rewire — called when screen re-mounts (return from minimize)
   // Does NOT re-join. Just re-attaches the callbacks.
   // ─────────────────────────────────────────────────────────────────────────
@@ -149,9 +170,8 @@ class ActiveCallService {
     _onRemoteLeft   = onRemoteLeft;
     _onJoinSuccess  = onJoinSuccess;
     _onError        = onError;
-    // Re-register handlers with updated callbacks
     _registerHandlers();
-    debugPrint('[ActiveCallService] 🔄 callbacks re-wired for $channelId');
+    debugPrint('[ActiveCallService] 🔄 callbacks re-wired for $_channelId');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -160,7 +180,6 @@ class ActiveCallService {
   // ─────────────────────────────────────────────────────────────────────────
   void minimize() {
     debugPrint('[ActiveCallService] ⬇ minimized — engine stays alive');
-    // Nothing to do — engine continues running
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -187,12 +206,22 @@ class ActiveCallService {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // endCall — called when call truly ends (user pressed end / server ended)
+  // endCall — called when call truly ends
+  // For pattern B (external engine), just clears references — the screen
+  // still releases the engine in its own dispose().
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> endCall() async {
-    debugPrint('[ActiveCallService] 🔴 ending call $channelId');
+    debugPrint('[ActiveCallService] 🔴 ending call $_channelId (ownsEngine=$_ownsEngine)');
     _isActive = false;
-    await _release();
+    if (_ownsEngine) {
+      await _release();
+    } else {
+      // Just clear references; screen will release the engine
+      _engine    = null;
+      _joined    = false;
+      _channelId = '';
+      remoteUsers.clear();
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -228,12 +257,12 @@ class ActiveCallService {
 
   Future<void> _release() async {
     final engine = _engine;
-    _engine  = null;
-    _joined  = false;
+    _engine    = null;
+    _joined    = false;
     _channelId = '';
     remoteUsers.clear();
 
-    if (engine != null) {
+    if (engine != null && _ownsEngine) {
       try { await engine.leaveChannel(); } catch (_) {}
       await Future.delayed(const Duration(milliseconds: 200));
       try { await engine.release(); }     catch (_) {}

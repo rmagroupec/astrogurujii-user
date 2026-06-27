@@ -1,19 +1,23 @@
+// lib/Screens/live/components/top_section.dart
+//
+// Redesigned to match AstroTalk live UI exactly:
+// - Host pill (avatar + name + dynamic subtitle + signal bars + timer)
+// - Separate Grid icon, Follow button, overflow chevron, Close (X) button
+// - "Private call" lock badge shown only when a user is connected
+
 import 'dart:async';
 import 'dart:developer';
-
 
 import 'package:agora_rtc_engine/agora_rtc_engine.dart';
 import 'package:astro_gurujii/Screens/Models/GetLiveUser.dart';
 import 'package:astro_gurujii/Screens/WebServices/HttpServices.dart';
 import 'package:astro_gurujii/Screens/live/components/reportAstro.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:get/get.dart';
 
 import '../../../Setup/SetUp.dart';
-import '../../../Utilities/CustomText.dart';
 import '../../AstroDetails/AstroDetails.dart';
 import '../../Models/AstroDetailsModel.dart';
 import '../../pooja_orders/controller/PoojaOrderController.dart';
@@ -22,17 +26,23 @@ class TopSection extends StatefulWidget {
   final String name;
   final String screenType;
   final RtcEngine agoraEngine;
+  final bool isUserConnected; // true when audience joined = show "Private call"
 
   var astroid;
   var id;
   final String astroImage;
   final List<String> numberOfuserJoin;
-  TopSection(
-      {this.astroid,
-      this.id,
-      required this.name,
-      required this.astroImage,
-      required this.numberOfuserJoin, required this.screenType, required this.agoraEngine});
+
+  TopSection({
+    this.astroid,
+    this.id,
+    required this.name,
+    required this.astroImage,
+    required this.numberOfuserJoin,
+    required this.screenType,
+    required this.agoraEngine,
+    this.isUserConnected = false,
+  });
 
   @override
   State<TopSection> createState() => _TopSectionState();
@@ -41,580 +51,370 @@ class TopSection extends StatefulWidget {
 class _TopSectionState extends State<TopSection> {
   final HttpServices _httpServices = HttpServices();
   List<Results> data = [];
-  inFun() {
-    print("dfdgf");
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      print('dfdgfGot a message whilst in the foreground!');
-      print('dfdgfMessage data: ${message.data}');
+  var usersCount = 0;
 
-      if (message.notification != null) {
-        print(
-            'dfdgfMessage also contained a notification: ${message.notification}');
-      }
+  // Live timer
+  int _elapsedSeconds = 0;
+  Timer? _liveTimer;
+
+  String get _timerLabel {
+    final m = _elapsedSeconds ~/ 60;
+    final s = _elapsedSeconds % 60;
+    return '${m.toString().padLeft(2, '0')} m ${s.toString().padLeft(2, '0')} s';
+  }
+
+  // When a viewer is connected we're in a "private" 1:1 moment, so the
+  // subtitle under the host name switches from a watching-count to "& Private".
+  String get _subtitle =>
+      widget.isUserConnected ? '& Private' : '$usersCount watching';
+
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+  @override
+  void initState() {
+    super.initState();
+    _listenFCM();
+    astroDetailsApi();
+    _fetchUserCount();
+    _startPolling();
+    _startLiveTimer();
+  }
+
+  @override
+  void dispose() {
+    _liveTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startLiveTimer() {
+    _liveTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _elapsedSeconds++);
+    });
+  }
+
+  void _listenFCM() {
+    FirebaseMessaging.onMessage.listen((msg) {
+      log('FCM foreground: ${msg.data}');
+    });
+  }
+
+  // ── API calls ─────────────────────────────────────────────────────────────
+
+  void astroDetailsApi() async {
+    var res = await _httpServices.astrologer_details(id: widget.astroid);
+    if (res?.status == true && mounted) {
+      setState(() => data = res!.results!);
+    }
+  }
+
+  void _fetchUserCount() {
+    if (widget.screenType == "home") {
+      _httpServices.get_live_users_count(id: widget.id).then((value) {
+        if (value['success'] == true && mounted) {
+          setState(() => usersCount = value['data']['usersCount'] ?? 0);
+        }
+      }).catchError((e) => log('get_live_users_count error: $e'));
+    } else if (widget.screenType == "pooja") {
+      _httpServices.get_live_users_count_forPooja(id: widget.id).then((value) {
+        if (value['success'] == true && mounted) {
+          setState(() => usersCount = value['data']['usersCount'] ?? 0);
+        }
+      }).catchError((e) => log('get_live_users_count_forPooja error: $e'));
+    }
+  }
+
+  void _startPolling() {
+    Timer.periodic(const Duration(seconds: 10), (_) {
+      if (!mounted) return;
+      _fetchUserCount();
     });
   }
 
   void callFollowApi() async {
     var res = await _httpServices.follow_astro(id: widget.astroid);
-    if (res!.status == true) {
-      setState(() {
-        Fluttertoast.showToast(msg: res.message!);
-        astroDetailsApi();
-      });
+    if (res?.status == true) {
+      Fluttertoast.showToast(msg: res!.message!);
+      astroDetailsApi();
     } else {
-      Fluttertoast.showToast(msg: res.message!);
+      Fluttertoast.showToast(msg: res?.message ?? '');
     }
   }
 
-  void astroDetailsApi() async {
-    var res = await _httpServices.astrologer_details(id: widget.astroid);
-    if (res!.status! == true) {
-      setState(() {
-        data = res.results!;
+  // ── Call end ──────────────────────────────────────────────────────────────
+
+  void onCallEnd(BuildContext context, String id) async {
+    if (widget.screenType == "home") {
+      _httpServices.leaveLiveForHome(live_id: id).then((v) {
+        Fluttertoast.showToast(msg: v['message'].toString());
       });
+    } else if (widget.screenType == "pooja") {
+      PoojaOrderController controller = Get.put(PoojaOrderController());
+      controller.leaveLive(id);
     }
+    widget.agoraEngine.leaveChannel();
+    widget.agoraEngine.release();
+    Navigator.pop(context);
   }
 
-  List<Users>? users = [];
-  var usersCount;
-
-  void get_live_users_count() async {
-
-    await _httpServices.get_live_users_count(id: widget.id).then((value) {
-      if (value['success'] == true) {
-        // setState(() {
-        // users = res.data!.users!;
-        // usersCount = res.data?.usersCount;
-        usersCount = value['data']['usersCount'].toString();
-        print("UserCount for live----------->>> $usersCount");
-        // });
-      }
-
-    }).onError((error, stackTrace) {
-      log("Error in get_live_users_count----->>> $error");
-      log("Error in get_live_users_count----->>> $stackTrace");
-
-
-    });
-
-  }
-
-  void get_live_users_count_forPooja() async {
-
-
-    await _httpServices.get_live_users_count_forPooja(id: widget.id).then((value) {
-      if (value['success'] == true) {
-        // setState(() {
-        // users = res.data!.users!;
-        // usersCount = res.data?.usersCount;
-        usersCount = value['data']['usersCount'].toString();
-        print("UserCount for pojja ----------->>> $usersCount");
-        // });
-      }
-
-    }).onError((error, stackTrace) {
-      log("Error in get_live_users_count_forPooja----->>> $error");
-      log("Error in get_live_users_count_forPooja----->>> $stackTrace");
-
-
-    });
-
-  }
-  // void get_live_users_count() async {
-  //   var res = await _httpServices.get_live_users_count(id: widget.id);
-  //   if (res!.success! == true) {
-  //     setState(() {
-  //       users = res.data!.users!;
-  //       usersCount = res.data?.usersCount;
-  //     });
-  //   }
-  // }
-
-  late Timer timer;
-  late Timer meetingTimer;
-  void startMeetingTimer() {
-    meetingTimer = Timer.periodic(
-      const Duration(seconds: 10),
-          (meetingTimer) {
-
-        if(widget.screenType=="home"){
-          print("count from home");
-          get_live_users_count();
-
-        }else if(widget.screenType=="pooja"){
-          print("count from pooja");
-
-          get_live_users_count_forPooja();
-        }
-
-      },
+  Future<void> _showReportDialog(BuildContext context) async {
+    return showDialog(
+      context: context,
+      builder: (_) => ReportDialog(widget.astroid.toString()),
     );
   }
 
-  // void startMeetingTimer() {
-  //   meetingTimer = Timer.periodic(
-  //     const Duration(seconds: 10),
-  //     (meetingTimer) {
-  //       get_live_users_count();
-  //     },
-  //   );
-  // }
+  // TODO: wire this to whatever the overflow chevron should open
+  // (e.g. a "more options" sheet). Left as a no-op for now.
+  void _onOverflowTap() {}
 
-  @override
-  void initState() {
-    inFun();
-    astroDetailsApi();
-    // get_live_users_count();
-    if(widget.screenType=="home"){
-      print("count from home");
-      get_live_users_count();
-
-    }else if(widget.screenType=="pooja"){
-      print("count from pooja");
-
-      get_live_users_count_forPooja();
-    }
-    startMeetingTimer();
-    super.initState();
-  }
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-     double height = MediaQuery.of(context).size.height;
-    double width = MediaQuery.of(context).size.width;
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.20,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Colors.black.withOpacity(0.3), // Transparent black at the top
-            Color.fromRGBO(0, 0, 0, 0), // Fully transparent at the bottom
-          ],
-        ),
-      ),
-      child: 
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: Get.width,
-              padding: EdgeInsets.all(10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    width: MediaQuery.of(context).size.width * 0.75,
-                    height: height/13.28,
-                    padding: EdgeInsets.symmetric(vertical: 5, horizontal: 10),
-                    decoration: ShapeDecoration(
-                      color: Colors.black.withOpacity(0.41999998688697815),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(width/14.13),
+    final w = MediaQuery.of(context).size.width;
+    final bool isFollowed =
+        data.isNotEmpty && data[0].is_Follow.toString() == "1";
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Status bar space ──
+        SizedBox(height: MediaQuery.of(context).padding.top + 8),
+
+        // ── Top bar ──
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              // Host info pill — avatar, name, subtitle, signal bars, timer
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AstroDetails(
+                        astroLogerName: widget.name,
+                        categoryId: widget.astroid,
                       ),
                     ),
+                  ),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.42),
+                      borderRadius: BorderRadius.circular(w / 12),
+                    ),
                     child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        InkWell(
-                          onTap: () {
-
-                            Navigator.push(context, MaterialPageRoute(builder: (context) => AstroDetails(
-                              astroLogerName: widget.name,
-                              categoryId:widget.astroid ,
-
-                            ),));
-
-                          },
-                          child: Row(
+                        // Avatar
+                        ClipOval(
+                          child: Image.network(
+                            widget.astroImage,
+                            width: w / 11,
+                            height: w / 11,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => CircleAvatar(
+                              radius: w / 22,
+                              backgroundColor: const Color(0xFF9C6B4A),
+                              child: Text(
+                                widget.name.isNotEmpty ? widget.name[0] : 'A',
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 7),
+                        // Name + subtitle
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-
-                              ClipOval(
-
-                                child: Image.network(widget.astroImage,fit: BoxFit.fill,
-                                  width: width/7.06,
-                                  height: height/15.5,
+                              Text(
+                                widget.name,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: w / 28,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              // Container(
-                              //   width: 60,
-                              //   height: 60,
-                              //   decoration: BoxDecoration(
-                              //     shape: BoxShape.circle,
-                              //     image: DecorationImage(
-                              //       image: NetworkImage(widget.astroImage),
-                              //       // AssetImage(
-                              //       //     "assets/Icons/profile_icon.png"),
-                              //       fit: BoxFit.fill,
-                              //     ),
-                              //   ),
-                              // ),
-                              SizedBox(
-                                width: width/42.4,
-                              ),
-                              Column(
-
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  SizedBox(
-                                   child:
-                                     Text(
-                                      "${widget.name}" ,
-                                      textAlign: TextAlign.center,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: width/26.5,
-                                        fontFamily: 'Segoe UI',
-                                        fontWeight: FontWeight.w600,
-                                        letterSpacing: -0.24,
-                                      ),
-                                     )
-                                  ),
-                                  SizedBox(
-                                    height: height/232.5,
-                                  ),
-                                  Row(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Container(
-                                        width: width/26.5,
-                                        height: height/58.25,
-                                        decoration: BoxDecoration(
-                                          image: DecorationImage(
-                                            image: AssetImage(
-                                                "assets/Icons/profile_icon.png"),
-                                            fit: BoxFit.fill,
-                                          ),
-                                        ),
-                                      ),
-                                      SizedBox(
-                                        width: 3,
-                                      ),
-                                      Text(
-                                        usersCount.toString(),
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: width/35.33,
-                                          fontFamily: 'Segoe UI',
-                                          fontWeight: FontWeight.w600,
-                                          letterSpacing: -0.24,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                              Text(
+                                _subtitle,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: w / 38,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ],
                           ),
                         ),
-                        InkWell(
-                          onTap: () {
-                            callFollowApi();
-                          },
-                          child: Container(
-                            width: width/5.3,
-                            height: height/31,
-                            decoration: ShapeDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment(0.00, -1.00),
-                                end: Alignment(0, 1),
-                                colors: [Color(0xFFDD9750), Color(0xFFEE4262)],
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(width/14.62),
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                // state.getLiveRoomData!.data!.isFollowed
-                                //     .toString() ==
-                                //     "false"
-                                //     ?
-                                (data.length > 0)
-                                    ? (data[0].is_Follow!.toString() == "0")
-                                    ? "Follow me +"
-                                    : "Followed"
-                                    : "Follow me +",
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: width/26.3,
-                                  fontFamily: 'Segoe UI',
-                                  fontWeight: FontWeight.w400,
-                                  letterSpacing: -0.24,
-                                ),
-                              ),
-                            ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 1,
+                          height: 18,
+                          color: Colors.white24,
+                        ),
+                        const SizedBox(width: 8),
+                        // Signal bars
+                        _SignalBars(),
+                        const SizedBox(width: 8),
+                        // Live timer
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.4),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            _timerLabel,
+                            style:
+                                const TextStyle(color: Colors.white, fontSize: 11),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  InkWell(
-                    onTap: () {
-                      onCallEnd(context,widget.id.toString());
-                    },
-                    child: Container(
-                      padding: EdgeInsets.all(7),
-                      decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 1)),
-                      child: Icon(
-                        Icons.close,
-                        color: Colors.white,
-                        size: width/17.66,
-                      ),
-
-                      // Container(
-                      //   width: 15,
-                      //   height: 15,
-                      //   padding: EdgeInsets.all(7),
-                      //   decoration: BoxDecoration(
-                      //     image: DecorationImage(
-                      //       image: AssetImage(
-                      //           "assets/Icons/profile_icon.png"),
-                      //       fit: BoxFit.fill,
-                      //     ),
-                      //   ),
-                      // )
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Grid icon
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child:
+                    const Icon(Icons.grid_view_rounded, color: Colors.white, size: 18),
+              ),
+              const SizedBox(width: 8),
+              // Follow / Followed button — now its own pill, outside the host info pill
+              GestureDetector(
+                onTap: callFollowApi,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  decoration: BoxDecoration(
+                    gradient: isFollowed
+                        ? null
+                        : const LinearGradient(
+                            colors: [Color(0xFFDD9750), Color(0xFFEE4262)],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          ),
+                    color: isFollowed ? Colors.white24 : null,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    isFollowed ? 'Followed' : 'Follow',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
                     ),
-                  )
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              // Overflow chevron
+              GestureDetector(
+                onTap: _onOverflowTap,
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 2),
+                  child: Icon(Icons.chevron_right, color: Colors.white70, size: 20),
+                ),
+              ),
+              const SizedBox(width: 6),
+              // Close button
+              GestureDetector(
+                onTap: () => onCallEnd(context, widget.id.toString()),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1),
+                  ),
+                  child: const Icon(Icons.close, color: Colors.white, size: 18),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 10),
+
+        // ── "Private call" badge — only when a viewer is connected ──
+        if (widget.isUserConnected)
+          Padding(
+            padding: const EdgeInsets.only(left: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.45),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Icon(Icons.lock_outline, color: Colors.white, size: 13),
+                  SizedBox(width: 5),
+                  Text('Private call', style: TextStyle(color: Colors.white, fontSize: 12)),
                 ],
               ),
-            )
-          ],
-        ),
-        InkWell(
-          onTap: (){
-            _showMyDialog(context,widget.astroid.toString());
-        },
-          child: Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: Image.asset("assets/images/reporticonAstro.png",
-              height: 40,width: 40,fit: BoxFit.fill,),
+            ),
           ),
-        )
 
-      ],)
+        const SizedBox(height: 6),
+
+        // ── Report icon ──
+        Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            onTap: () => _showReportDialog(context),
+            child: Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: Image.asset(
+                "assets/images/reporticonAstro.png",
+                height: 36,
+                width: 36,
+                fit: BoxFit.fill,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
-
-  void onCallEnd(BuildContext context, String pujaId) async {
-    // print('uid====' + _users.toString());
-    // _users.clear();
-    // destroy Agora sdk
-    if(widget.screenType=="home"){
-      leaveLiveForHomeScreen(live_id: pujaId);
-
-      widget.agoraEngine.leaveChannel();
-      widget.agoraEngine.release();
-      Navigator.pop(context);
-
-    }else if(widget.screenType=="pooja"){
-
-      PoojaOrderController screenController=Get.put(PoojaOrderController());
-      screenController.leaveLive(pujaId);
-
-      widget.agoraEngine.leaveChannel();
-      widget.agoraEngine.release();
-      Navigator.pop(context);
-    }
-
-
-
-
-  }
-
-  void leaveLiveForHomeScreen({String ? live_id}){
-    _httpServices.leaveLiveForHome(live_id: live_id).then((value) {
-      Fluttertoast.showToast(msg: value['message'].toString());
-
-
-    }).onError((error, stackTrace) {
-      print("Error in Home leaveLive===========>>> $error");
-      print("Error in  Home leaveLive stackTrace===========>>> $stackTrace");
-    });
-
-    // _api.leaveLiveFun(puja_id: puja_id.toString()).then((value) {
-    //
-    //   Fluttertoast.showToast(msg: value['message'].toString());
-    //
-    // }).onError((error, stackTrace) {
-    //   print("Error in Home leaveLive===========>>> $error");
-    //   print("Error in  Home leaveLive stackTrace===========>>> $stackTrace");
-    //
-    // });
-
-  }
-
-
-  Future<void> _showMyDialog(BuildContext context, String astroId) async {
-    return showDialog<void>(
-      context: context,
-      builder: (BuildContext context) {
-        return ReportDialog(astroId);
-      },
-    );
-  }
-
-
-  // Future<void> _showMyDialog(BuildContext context, ) async {
-  //   return showDialog<void>(
-  //     context: context,
-  //     // barrierDismissible: false, // User must tap button to dismiss
-  //     builder: (BuildContext context) {
-  //       return  Dialog(
-  //
-  //         child:
-  //         Container(
-  //           child: SingleChildScrollView(
-  //               child: Column(children: [
-  //
-  //
-  //                 Row(
-  //                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  //                   children: [
-  //
-  //                     SizedBox(width: 1,),
-  //
-  //
-  //                     CustomText(
-  //                       text: "Report",
-  //                       fontWeight: FontWeight.bold,
-  //                       fontSize: 18,
-  //                     ),
-  //                     InkWell(
-  //                         onTap: (){
-  //                           Navigator.pop(context);
-  //
-  //                         },
-  //                         child: Image.asset("assets/images/cancelImage.png",height: 30,width: 30,))
-  //
-  //                   ],),
-  //
-  //             Column(
-  //               children: <Widget>[
-  //                 ListTile(
-  //                   title: const Text('Unprofessional Behaviour'),
-  //                   leading: Radio<ReportOption>(
-  //                     value: ReportOption.unprofessionalBehaviour,
-  //                     groupValue: _selectedOption,
-  //                     onChanged: (ReportOption? value) {
-  //                       setState(() {
-  //                         _selectedOption = value;
-  //                       });
-  //                     },
-  //                   ),
-  //                 ),
-  //                 ListTile(
-  //                   title: const Text('Abusive Content/Harmful'),
-  //                   leading: Radio<ReportOption>(
-  //                     value: ReportOption.abusiveContent,
-  //                     groupValue: _selectedOption,
-  //                     onChanged: (ReportOption? value) {
-  //                       setState(() {
-  //                         _selectedOption = value;
-  //                       });
-  //                     },
-  //                   ),
-  //                 ),
-  //                 ListTile(
-  //                   title: const Text('Misguidance'),
-  //                   leading: Radio<ReportOption>(
-  //                     value: ReportOption.misguidance,
-  //                     groupValue: _selectedOption,
-  //                     onChanged: (ReportOption? value) {
-  //                       setState(() {
-  //                         _selectedOption = value;
-  //                       });
-  //                     },
-  //                   ),
-  //                 ),
-  //                 ListTile(
-  //                   title: const Text('Others'),
-  //                   leading: Radio<ReportOption>(
-  //                     value: ReportOption.others,
-  //                     groupValue: _selectedOption,
-  //                     onChanged: (ReportOption? value) {
-  //                       setState(() {
-  //                         _selectedOption = value;
-  //                       });
-  //                     },
-  //                   ),
-  //                 ),
-  //               ],
-  //             ),
-  //
-  //                 SizedBox(height: 10,),
-  //
-  //                 Padding(
-  //                   padding: const EdgeInsets.all(8.0),
-  //                   child: Container(
-  //                     height: 100,
-  //                     decoration: BoxDecoration(
-  //                         borderRadius: BorderRadius.circular(10),
-  //                         border: Border.all(color: Colors.grey,)
-  //                     ),
-  //                     width: double.infinity,
-  //                     child: TextFormField(
-  //
-  //
-  //                       decoration: InputDecoration(
-  //                         hintText: "Write your reason....",
-  //                         contentPadding: EdgeInsets.only(left: 20),
-  //                         border: InputBorder.none,
-  //
-  //                       ),
-  //                     ),
-  //                   ),
-  //                 ),
-  //                 SizedBox(height: 10,),
-  //
-  //                 InkWell(
-  //                   onTap: (){
-  //                     Navigator.pop(context);
-  //                   },
-  //                   child: Container(
-  //                     height: 40,
-  //                     width: 100,
-  //                     decoration: BoxDecoration(
-  //                         color: primaryColor,
-  //                         borderRadius: BorderRadius.circular(10)
-  //                     ),
-  //                     child: Center(
-  //                       child: CustomText(
-  //                         text: "Submit",
-  //                         fontWeight: FontWeight.bold,
-  //                         fontSize: 14,
-  //                         color: CupertinoColors.white,
-  //                       ),
-  //                     ),
-  //                   ),
-  //                 ),
-  //                 SizedBox(height: 10,),
-  //               ],)
-  //           ),
-  //         ),
-  //
-  //
-  //
-  //
-  //
-  //
-  //       );
-  //     },
-  //   );
-  // }
-
 }
 
+// ── Signal bars widget ────────────────────────────────────────────────────────
 
-
+class _SignalBars extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [4.0, 7.0, 10.0, 13.0]
+          .map((h) => Container(
+                width: 3,
+                height: h,
+                margin: const EdgeInsets.only(right: 1.5),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ))
+          .toList(),
+    );
+  }
+}

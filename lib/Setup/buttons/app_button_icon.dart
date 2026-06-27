@@ -46,8 +46,8 @@ class AppButtonIcon extends StatelessWidget {
       width: width ?? double.infinity,
       child: ElevatedButton(
         child: _buildChildWidget(),
-
         style: ElevatedButton.styleFrom(
+          backgroundColor: backgroundColor, // ✅ FIXED: was commented out
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(
                 cornerRadius ?? AppDimens.buttonCornerRadius),
@@ -56,11 +56,9 @@ class AppButtonIcon extends StatelessWidget {
             color: borderColor ?? Colors.transparent,
             width: borderWidth ?? 0,
           ),
-          // primary: backgroundColor,
           padding: EdgeInsets.all(0),
         ),
         onPressed: onPressed,
-
       ),
     );
   }
@@ -72,13 +70,15 @@ class AppButtonIcon extends StatelessWidget {
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          leadingIcon ?? Container(),
+          leadingIcon != null
+              ? SizedBox(width: 10, height: 10, child: leadingIcon!)
+              : Container(),
           title != null
               ? CustomText(
-              text: title!,
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textWhite)
+                  text: title!,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textWhite)
               : Container(),
           trailingIcon ?? Container(),
         ],

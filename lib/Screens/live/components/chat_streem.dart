@@ -1,5 +1,3 @@
-
-
 import 'dart:collection';
 
 import 'package:astro_gurujii/Setup/SetUp.dart';
@@ -38,6 +36,7 @@ class _ChatStreemState extends State<ChatStreem> {
   SharedPreferences? prefs;
 
   String groupChatId = "";
+
   @override
   void initState() {
     widget.focusNode.addListener(onFocusChange);
@@ -48,7 +47,6 @@ class _ChatStreemState extends State<ChatStreem> {
 
   void onFocusChange() {
     if (widget.focusNode.hasFocus) {
-      // Hide sticker when keyboard appear
       setState(() {
         isShowSticker = false;
       });
@@ -69,40 +67,24 @@ class _ChatStreemState extends State<ChatStreem> {
     prefs = await SharedPreferences.getInstance();
     id = prefs?.getString('id') ?? '';
     if (id.hashCode <= widget.channelName.hashCode) {
-      groupChatId = '$id-widget.channelName';
-    } else {
-      groupChatId = '"12345-$id';
-    }
-
-    // textEditingController.clear();
-
-    prefs = await SharedPreferences.getInstance();
-    id = prefs?.getString('id') ?? '';
-    if (id.hashCode <= widget.channelName.hashCode) {
       groupChatId = '$id-${widget.channelName}';
     } else {
       groupChatId = '${widget.channelName}-$id';
     }
 
-    /* //FirebaseFirestore.instance.collection('users').doc(id).update({'chattingWith': peerId});
-      //group_id:4    user_id:3  reciver_id:6
-      RootRef=FirebaseDatabase.instance.reference()
-          .child("Group").child(widget.gid).child(prefs?.getString('id')).child(widget.astrologer_id);
-*/
-
     var user_id = prefs?.getString('id');
     var name = prefs?.getString('name');
     var timestamp = DateTime.now().millisecondsSinceEpoch;
     var messageSenderRef = "GroupLive/" + widget.channelName;
-
     var messageReceiverRef = "GroupLive/" + widget.channelName;
 
-    widget.messageChatReference = widget.messageChatReference
-        .child("Group")
-        .child(widget.channelName)
-        .push();
+    widget.messageChatReference =
+        widget.messageChatReference.child("Group").child(widget.channelName).push();
 
     var messagePushId = widget.messageChatReference.key;
+    // "joined" events use the same message pipe as chat text — the UI below
+    // renders the message field bold regardless of whether it says "joined"
+    // or an actual chat line, matching the screenshot.
     Map reqBody = {
       'date': "",
       'from': user_id,
@@ -124,69 +106,45 @@ class _ChatStreemState extends State<ChatStreem> {
   }
 
   Future<void> onSendMessage(String content, int type) async {
-    // type: 0 = text, 1 = image, 2 = sticker
-
-    //var  messageSenderRef="Group/" +peerId+"/"
-    var message_type = "text";
-    if (type == 0) {
-      message_type = "text";
-    } else if (type == 1) {
-      message_type = "image";
-    }
-
-    if (content.trim() != '') {
-      // textEditingController.clear();
-
-      prefs = await SharedPreferences.getInstance();
-      id = prefs?.getString('id') ?? '';
-      if (id.hashCode <= widget.channelName.hashCode) {
-        groupChatId = '$id-${widget.channelName}';
-      } else {
-        groupChatId = '${widget.channelName}-$id';
-      }
-
-      /* //FirebaseFirestore.instance.collection('users').doc(id).update({'chattingWith': peerId});
-      //group_id:4    user_id:3  reciver_id:6
-      RootRef=FirebaseDatabase.instance.reference()
-          .child("Group").child(widget.gid).child(prefs?.getString('id')).child(widget.astrologer_id);
-*/
-
-      var user_id = prefs?.getString('id');
-      var name = prefs?.getString('name');
-      var timestamp = DateTime.now().millisecondsSinceEpoch;
-      var messageSenderRef = "GroupLive/" + widget.channelName;
-
-      widget.messageChatReference = widget.messageChatReference
-          .child("GroupLive")
-          .child(widget.channelName)
-          .push();
-
-      var messagePushId = widget.messageChatReference.key;
-      Map reqBody = {
-        'date': "",
-        'from': user_id,
-        'message': content,
-        'message_id': messagePushId,
-        'date_time': timestamp,
-        'name': name,
-        'time': "",
-      };
-
-      var s1 = "$messageSenderRef/$messagePushId";
-
-      var MessageBodyDetails = HashMap<String, Map>();
-      MessageBodyDetails[s1] = reqBody;
-
-      FirebaseDatabase.instance.ref().update(MessageBodyDetails);
-
-      // listScrollController.animateTo(0.0,
-      //     duration: Duration(milliseconds: 300), curve: Curves.easeOut);
-    } else {
+    if (content.trim() == '') {
       Fluttertoast.showToast(
-          msg: 'Nothing to send',
-          backgroundColor: Colors.black,
-          textColor: Colors.red);
+          msg: 'Nothing to send', backgroundColor: Colors.black, textColor: Colors.red);
+      return;
     }
+
+    prefs = await SharedPreferences.getInstance();
+    id = prefs?.getString('id') ?? '';
+    if (id.hashCode <= widget.channelName.hashCode) {
+      groupChatId = '$id-${widget.channelName}';
+    } else {
+      groupChatId = '${widget.channelName}-$id';
+    }
+
+    var user_id = prefs?.getString('id');
+    var name = prefs?.getString('name');
+    var timestamp = DateTime.now().millisecondsSinceEpoch;
+    var messageSenderRef = "GroupLive/" + widget.channelName;
+
+    widget.messageChatReference =
+        widget.messageChatReference.child("GroupLive").child(widget.channelName).push();
+
+    var messagePushId = widget.messageChatReference.key;
+    Map reqBody = {
+      'date': "",
+      'from': user_id,
+      'message': content,
+      'message_id': messagePushId,
+      'date_time': timestamp,
+      'name': name,
+      'time': "",
+    };
+
+    var s1 = "$messageSenderRef/$messagePushId";
+
+    var MessageBodyDetails = HashMap<String, Map>();
+    MessageBodyDetails[s1] = reqBody;
+
+    FirebaseDatabase.instance.ref().update(MessageBodyDetails);
   }
 
   @override
@@ -207,40 +165,59 @@ class _ChatStreemState extends State<ChatStreem> {
       child: FirebaseAnimatedList(
         physics: ClampingScrollPhysics(),
         query: widget.messageChatReference.orderByChild("date_time"),
-        padding: EdgeInsets.all(8.0),
+        padding: EdgeInsets.all(4.0),
         reverse: true,
         sort: (DataSnapshot a, DataSnapshot b) => b.key!.compareTo(a.key!),
         itemBuilder: (_, DataSnapshot snapshot, Animation<double> animation, int x) {
           final data = snapshot.value as Map<dynamic, dynamic>;
-          print("size width");
-          print(MediaQuery.of(context).size.width);
-           print(MediaQuery.of(context).size.height);
-    
-          return Container(
-            width: width/2.08,
-            height: height/21.62,
+          final name = (data["name"] ?? '').toString();
+          final message = (data["message"] ?? '').toString();
+
+          // Flat row — circular initial avatar, name (regular weight),
+          // message/event text (bold) underneath. No dark bubble, matching
+          // the screenshot's "Divya joined" style notifications.
+          return Padding(
+            padding: EdgeInsets.only(bottom: height / 186),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Container(
-                //   height: 31,
-                //   width: 31,
-                //   decoration: BoxDecoration(border: Border.all(width: 2, color: whiteColor), image: DecorationImage(image: NetworkImage(data["name"]))),
-                // ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(data["name"] , style: TextStyle(color: Colors.white, fontSize: width/47.11, fontFamily: 'poppinsbold', fontWeight: FontWeight.bold)),
-                    Text(data["message"] , style: TextStyle(color: Colors.white, fontSize: width/47.11, fontFamily: 'poppins', fontWeight: FontWeight.normal)),
-                  ],
+                CircleAvatar(
+                  radius: width / 32,
+                  backgroundColor: const Color(0xFFE8B43A),
+                  child: Text(
+                    name.isNotEmpty ? name[0].toUpperCase() : '?',
+                    style: const TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                SizedBox(width: width / 56.5),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        name,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: width / 30,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        message,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: width / 30,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
-            padding: EdgeInsets.fromLTRB(width/28.26, height/186, width/28.26,  height/186),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.30),
-              borderRadius: BorderRadius.circular(30.0),
-            ),
-            margin: EdgeInsets.only(bottom: height/93.0, right: width/28.26, ),
           );
         },
       ),

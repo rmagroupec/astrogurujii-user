@@ -324,7 +324,7 @@ class Rating {
   String? profileImg;
   int? rating;
   String? review;
-  var astr_comment;
+  String? astr_comment;
   String? createdDate;
 
   Rating(

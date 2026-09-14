@@ -273,7 +273,7 @@ class _PlaceOrderState extends State<PlaceOrder> {
       // 'amount': double.parse(amount.toString())*100,
       // 'amount': 1 * 100,
       'currency': 'INR',
-      'image': 'https://admin.astrogurujii.com/logo/app_logo.png',
+      'image': 'https://admin.vaidikguru.com/logo/app_logo.png',
       'name': "ASTROGURUJII",
       'description': "AstroGurujii",
       // 'order_id': 'order_123456789',

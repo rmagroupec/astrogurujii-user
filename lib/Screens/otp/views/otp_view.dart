@@ -17,8 +17,8 @@ import '../../WebViewerTerms.dart';
 class OTPView extends GetView<OtpController> {
   final loginController = Get.put(LoginController());
 
-  var terms = "https://admin.astrogurujii.com/links/termandcondition";
-  var privacy = "https://admin.astrogurujii.com/links/privacypolicy";
+  var terms = "https://admin.vaidikguru.com/links/termandcondition";
+  var privacy = "https://admin.vaidikguru.com/links/privacypolicy";
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +35,7 @@ class OTPView extends GetView<OtpController> {
                 children: [
                   Center(
                     child: Image.asset(
-                      AppImages.circular_image_icon,
+                      AppImages.loginj,
                       width: Get.width * 0.7,
                     ),
                   ),

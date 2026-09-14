@@ -59,7 +59,7 @@ class MyApp extends StatelessWidget {
         ],
         child: GetMaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'Astro Gurujii',
+            title: 'Vaidikguru',
             getPages: AppPages.routes,
             theme: ThemeData(
                 splashColor: Color(redColor2),

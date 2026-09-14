@@ -18,8 +18,8 @@ class LoginView extends GetView<LoginController> {
   String countyCode = "91";
   bool newUser = false;
 
-  var terms = "https://admin.astrogurujii.com/links/termandcondition";
-  var privacy = "https://admin.astrogurujii.com/links/privacypolicy";
+  var terms = "https://admin.vaidikguru.com/links/termandcondition";
+  var privacy = "https://admin.vaidikguru.com/links/privacypolicy";
 
   @override
   Widget build(BuildContext context) {

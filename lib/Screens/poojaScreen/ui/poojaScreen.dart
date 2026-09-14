@@ -191,7 +191,7 @@ class _PoojaScreenState extends State<PoojaScreen> {
               automaticallyImplyLeading: false,
               // titleSpacing: -2,
               title: CustomText(
-                text: "Astro Gurujii Puja",
+                text: "Vaidikguru Puja",
                 fontWeight: FontWeight.bold,
                 color: Colors.white,
               ),
@@ -697,7 +697,7 @@ class _PoojaScreenState extends State<PoojaScreen> {
                 InkWell(
                   onTap: () {
                     Share.share(
-                        'https://play.google.com/store/apps/details?id=com.user.astrogurujii');
+                        'https://play.google.com/store/apps/details?id=com.app.vaidikguru');
                   },
                   child: Padding(
                     padding: const EdgeInsets.only(

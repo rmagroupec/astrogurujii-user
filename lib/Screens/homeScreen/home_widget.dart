@@ -23,9 +23,9 @@ bool _isLoading = true;
 bool isSelected = true;
 bool _flexibleUpdateAvailable = false;
 var walletAmount = "";
-var terms = "https://admin.astrogurujii.com/links/termandcondition";
-var privacy = "https://admin.astrogurujii.com/links/privacypolicy";
-var aboutus = "https://admin.astrogurujii.com/links/aboutus";
+var terms = "https://admin.vaidikguru.com/links/termandcondition";
+var privacy = "https://admin.vaidikguru.com/links/privacypolicy";
+var aboutus = "https://admin.vaidikguru.com/links/aboutus";
 var contactus = "https://api.astrogurujii.com/links/contactus";
 var shipinganddelivery =
     "https://api.astrogurujii.com/links/shipinganddelivery";

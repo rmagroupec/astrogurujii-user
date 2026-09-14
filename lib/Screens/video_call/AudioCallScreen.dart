@@ -420,15 +420,11 @@ class _AfterCallConnectingState extends State<AfterCallConnecting> {
       Navigator.pushReplacement(
           context, MaterialPageRoute(builder: (_) => MainHomeScreenWithBottomNavigation()));
     } else {
-      Fluttertoast.showToast(msg: 'Something went wrong');
+       Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (_) => MainHomeScreenWithBottomNavigation()));
     }
   }
 
-  void _showRatingDialogOnce() {
-    if (_ratingDialogShown || !mounted || _disposed) return;
-    _ratingDialogShown = true;
-    _showRatingDialog(context);
-  }
 
   // ── End call ──────────────────────────────────────────────────────────────
   void _endCallAndRate() {
@@ -652,52 +648,288 @@ class _AfterCallConnectingState extends State<AfterCallConnecting> {
     );
   }
 
-  void _showRatingDialog(BuildContext ctx) {
-    showDialog(
-      context           : ctx,
-      barrierDismissible: false,
-      builder: (dCtx) => AlertDialog(
-        insetPadding: const EdgeInsets.only(left: 20, right: 20, bottom: 10),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        title  : const Text('Rate Your Experience'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RatingBar.builder(
-                initialRating : 0,
-                minRating     : 1,
-                itemCount     : 5,
-                itemPadding   : const EdgeInsets.symmetric(horizontal: 4),
-                itemBuilder   : (_, __) => const Icon(Icons.star, color: Colors.amber),
-                onRatingUpdate: (r) => ratingPoint = r,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller : reviewControler,
-                maxLines   : 3,
-                decoration : const InputDecoration(
-                  hintText      : 'Write a review...',
-                  border        : OutlineInputBorder(),
-                  contentPadding: EdgeInsets.all(8),
-                ),
-              ),
-            ],
-          ),
+ void _showRatingDialogOnce() {
+  if (_ratingDialogShown || !mounted || _disposed) return;
+  _ratingDialogShown = true;
+  _showRatingSheet(context);
+}
+
+void _showRatingSheet(BuildContext ctx) {
+  showModalBottomSheet(
+    context: ctx,
+    isDismissible: false,
+    enableDrag: false,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (sheetCtx) => CallRatingSheet(
+      userName: widget.name,
+      userAvatar: widget.profile,
+      sessionTime: _displayTime,
+      sessionType: RatingSessionType.audio,
+      onSubmit: (rating, review) async {
+        await _callAliForRating(rating, review);
+        
+      },
+      onSkip: () => Navigator.pushAndRemoveUntil(
+      sheetCtx,
+      MaterialPageRoute(
+          builder: (_) => MainHomeScreenWithBottomNavigation()),
+      (route) => false,
+    ),
+    ),
+  );
+}
+}
+
+enum RatingSessionType { chat, audio, video }
+
+class CallRatingSheet extends StatefulWidget {
+  final String userName;
+  final String userAvatar;
+  final String sessionTime;
+  final RatingSessionType sessionType;
+  final Future<void> Function(double rating, String review) onSubmit;
+  final VoidCallback onSkip;
+
+  const CallRatingSheet({
+    Key? key,
+    required this.userName,
+    required this.userAvatar,
+    required this.sessionTime,
+    required this.sessionType,
+    required this.onSubmit,
+    required this.onSkip,
+  }) : super(key: key);
+
+  @override
+  State<CallRatingSheet> createState() => _CallRatingSheetState();
+}
+
+class _CallRatingSheetState extends State<CallRatingSheet> {
+  // ── Fixed colors (no theme dependency) ────────────────────────────────────
+  static const _accentYellow  = Color(0xFFF19425);
+  static const _starGold      = Color(0xFFEBC351);
+  static const _cardBg        = Color(0xFFFFF8E1);
+  static const _surface       = Colors.white;
+  static const _textPrimary   = Color(0xFF1A1A1A);
+  static const _textSecondary = Color(0xFF757575);
+  static const _borderColor   = Color(0xFFE0E0E0);
+  static const _fieldFill     = Color(0xFFF5F5F5);
+
+  int _stars = 0;
+  final _reviewCtrl = TextEditingController();
+  bool _submitting = false;
+
+  static const _labels = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
+
+  @override
+  void dispose() {
+    _reviewCtrl.dispose();
+    super.dispose();
+  }
+
+  IconData get _sessionIcon {
+    switch (widget.sessionType) {
+      case RatingSessionType.audio:
+        return Icons.call_outlined;
+      case RatingSessionType.video:
+        return Icons.videocam_outlined;
+      case RatingSessionType.chat:
+      default:
+        return Icons.chat_bubble_outline;
+    }
+  }
+
+  String get _sessionLabel {
+    switch (widget.sessionType) {
+      case RatingSessionType.audio:
+        return 'Call';
+      case RatingSessionType.video:
+        return 'Video Call';
+      case RatingSessionType.chat:
+      default:
+        return 'Chat';
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_stars == 0) {
+      Fluttertoast.showToast(msg: 'Please select a star rating.');
+      return;
+    }
+    setState(() => _submitting = true);
+    await widget.onSubmit(_stars.toDouble(), _reviewCtrl.text.trim());
+    if (!mounted) return;
+    setState(() => _submitting = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bi = MediaQuery.of(context).viewInsets.bottom;
+
+    return WillPopScope(
+      onWillPop: () async => false,
+      child: Container(
+        padding: EdgeInsets.only(left: 20, right: 20, top: 24, bottom: 24 + bi),
+        decoration: const BoxDecoration(
+          color: _surface,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              if (ratingPoint < 1) {
-                Fluttertoast.showToast(msg: 'Please give your valuable feedback');
-              } else {
-                Navigator.pop(dCtx);
-                _callAliForRating(ratingPoint, reviewControler.text);
-              }
-            },
-            child: const Text('SUBMIT'),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+
+          Container(width: 40, height: 4,
+              decoration: BoxDecoration(
+                  color: _borderColor,
+                  borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 20),
+
+          // ── Session summary card ─────────────────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: _cardBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: _accentYellow),
+            ),
+            child: Row(children: [
+              Container(
+                width: 52, height: 52,
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _accentYellow, width: 2)),
+                child: ClipOval(child: Image.network(widget.userAvatar,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                        color: _accentYellow,
+                        child: const Icon(Icons.person, color: Colors.white))))),
+              const SizedBox(width: 12),
+              Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(widget.userName,
+                    style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: _textPrimary)),
+                const SizedBox(height: 2),
+                Row(children: [
+                  Icon(_sessionIcon, size: 12, color: _textSecondary),
+                  const SizedBox(width: 4),
+                  Text('$_sessionLabel',
+                      style: const TextStyle(fontSize: 12, color: _textSecondary)),
+                ]),
+              ])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(12)),
+                child: const Text('Ended',
+                    style: TextStyle(
+                        color: Colors.red,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600)),
+              ),
+            ]),
           ),
-        ],
+          const SizedBox(height: 24),
+
+          const Text('Rate Your Experience',
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: _textPrimary)),
+          const SizedBox(height: 4),
+          Text('How was your $_sessionLabel with ${widget.userName}?',
+              style: const TextStyle(fontSize: 13, color: _textSecondary)),
+          const SizedBox(height: 20),
+
+          // ── Stars ────────────────────────────────────────────────────────
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(5, (i) {
+              final s = i + 1;
+              return GestureDetector(
+                onTap: _submitting ? null : () => setState(() => _stars = s),
+                child: Padding(padding: const EdgeInsets.all(4),
+                  child: Icon(
+                    _stars >= s
+                        ? Icons.star_rounded
+                        : Icons.star_outline_rounded,
+                    size: 44,
+                    color: _stars >= s ? _starGold : Colors.grey.shade300,
+                  )),
+              );
+            }),
+          ),
+          if (_stars > 0)
+            Padding(padding: const EdgeInsets.only(top: 6),
+              child: Text(_labels[_stars],
+                  style: const TextStyle(
+                      color: _starGold,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14))),
+          const SizedBox(height: 20),
+
+          // ── Review textfield ──────────────────────────────────────────────
+          TextField(
+            controller: _reviewCtrl,
+            maxLines: 3,
+            maxLength: 300,
+            enabled: !_submitting,
+            style: const TextStyle(color: _textPrimary),
+            decoration: InputDecoration(
+              hintText: 'Write your review (optional)…',
+              hintStyle: const TextStyle(color: _textSecondary, fontSize: 13),
+              filled: true,
+              fillColor: _fieldFill,
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _borderColor)),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _borderColor)),
+              focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: _accentYellow)),
+              contentPadding: const EdgeInsets.all(12),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Skip / Submit ─────────────────────────────────────────────────
+          Row(children: [
+            Expanded(child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(color: _borderColor),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _submitting ? null : widget.onSkip,
+              child: const Text('Skip', style: TextStyle(color: _textSecondary)),
+            )),
+            const SizedBox(width: 12),
+            Expanded(flex: 2, child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                backgroundColor: _accentYellow,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                elevation: 0,
+              ),
+              onPressed: _submitting ? null : _submit,
+              child: _submitting
+                  ? const SizedBox(width: 20, height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.black))
+                  : const Text('Submit Rating',
+                      style: TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15)),
+            )),
+          ]),
+        ]),
       ),
     );
   }

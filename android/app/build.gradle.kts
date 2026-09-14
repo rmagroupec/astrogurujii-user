@@ -17,9 +17,9 @@ val localProperties = Properties().apply {
 }
 android {
     
-    namespace = "com.user.astrogurujii"
+    namespace = "com.app.vaidikguru"
     ndkVersion = "27.0.12077973"
-    compileSdk = 35
+    compileSdk = 36
     
 
     compileOptions {
@@ -33,22 +33,22 @@ android {
     }
     signingConfigs {
         create("release") {
-            storeFile = file("astrogurujii_user.jks")
-            storePassword = "arvind123arvind"
-            keyAlias = "arvind123arvind"
-            keyPassword = "arvind123arvind"
+            storeFile = file("upload-keystore.jks")
+            storePassword = "Rohit@1234"
+            keyAlias = "upload"
+            keyPassword = "Rohit@1234"
         }
     }
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.user.astrogurujii"
+        applicationId = "com.app.vaidikguru"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24
-        targetSdk = flutter.targetSdkVersion
-        versionCode = 34
-        versionName = "1.1.34"
-    }
+        targetSdk = 36
+        versionCode = 3
+        versionName = "1.1.3"
+    } 
 
     buildTypes {
         release {

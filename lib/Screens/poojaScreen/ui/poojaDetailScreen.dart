@@ -159,7 +159,7 @@ class _PoojaDetailScreenState extends State<PoojaDetailScreen> {
               child: InkWell(
                   onTap: () {
                     Share.share(
-                        'https://play.google.com/store/apps/details?id=com.user.astrogurujii');
+                        'https://play.google.com/store/apps/details?id=com.app.vaidikguru');
 
                   },
                   child: Image.asset(

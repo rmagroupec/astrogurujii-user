@@ -70,14 +70,14 @@ class LiveVideoCallScreen extends StatefulWidget {
 class _LiveVideoCallScreenState extends State<LiveVideoCallScreen> {
   static const _appId   = '8782e154141a4c0bbc8acaa3004d21f2';
   static const _dbUrl   = 'https://astrogurujii-production-default-rtdb.firebaseio.com/';
-  static const _baseUrl = 'https://admin.astrogurujii.com/';
-
+  static const _baseUrl = 'https://admin.vaidikguru.com/';
+  int? _privateUid;
   // ── Agora public stream ───────────────────────────────────────────────────
   late RtcEngine _engine;
   bool _engineReady        = false;
   int? _remoteUid;
   bool _remoteVideoDecoding = false;
-
+int? _privateRemoteUid;  // add with other private call fields
   final AgoraController agoraController = Get.put(AgoraController());
   final HttpServices    _httpService    = HttpServices();
 
@@ -112,11 +112,13 @@ class _LiveVideoCallScreenState extends State<LiveVideoCallScreen> {
   List<Data> dataGifts = [];
 
   // ── Private call ──────────────────────────────────────────────────────────
+// ── Private call ──────────────────────────────────────────────────────────
   _PCState   _pcState          = _PCState.none;
   String     _privateChannelId = '';
   String     _privateToken     = '';
   RtcEngine? _privateEngine;
   bool       _privateMicMuted  = false;
+  // int?       _privateUid;
 
   // Wallet countdown (synced with Firebase CallSession)
   int    _secondsRemaining = 0;
@@ -142,23 +144,23 @@ class _LiveVideoCallScreenState extends State<LiveVideoCallScreen> {
       if (widget.screenType == 'pooja') _joinPooja(widget.id);
     });
   }
+// DELETE _releasePrivateEngine() entirely
 
-  @override
-  void dispose() {
-    _countdownTick?.cancel();
-    _privateCallSub?.cancel();
-    _sessionSub?.cancel();
-    textEditingController.dispose();
-    textTobeSend.dispose();
-    focusNode.dispose();
-    listScrollController.dispose();
-    _viewerRef?.child(_myUid.toString()).remove();
-    try { _engine.leaveChannel(); } catch (_) {}
-    try { _engine.stopPreview();  } catch (_) {}
-    try { _engine.release();      } catch (_) {}
-    _releasePrivateEngine();
-    super.dispose();
-  }
+@override
+void dispose() {
+  _countdownTick?.cancel();
+  _privateCallSub?.cancel();
+  _sessionSub?.cancel();
+  textEditingController.dispose();
+  textTobeSend.dispose();
+  focusNode.dispose();
+  listScrollController.dispose();
+  _viewerRef?.child(_myUid.toString()).remove();
+  try { _engine.leaveChannel(); } catch (_) {}
+  try { _engine.stopPreview();  } catch (_) {}
+  try { _engine.release();      } catch (_) {}
+  super.dispose();
+}
 
   Future<void> _loadPrefs() async {
     final p = await SharedPreferences.getInstance();
@@ -217,10 +219,16 @@ class _LiveVideoCallScreenState extends State<LiveVideoCallScreen> {
         _viewerRef?.child(_myUid.toString()).set(true);
         if (mounted) setState(() => _engineReady = true);
       },
-      onUserJoined: (conn, uid, elapsed) {
-        agoraController.startMeetingTimer();
-        if (mounted) setState(() { _remoteUid = uid; _remoteVideoDecoding = true; });
-      },
+     onUserJoined: (conn, uid, elapsed) {
+  if (conn.channelId == (widget.channelName ?? '')) {
+    // Public stream — astrologer joined as broadcaster
+    agoraController.startMeetingTimer();
+    if (mounted) setState(() { _remoteUid = uid; _remoteVideoDecoding = true; });
+  } else if (conn.channelId == _privateChannelId) {
+    // Private channel — astrologer's video feed
+    if (mounted) setState(() => _privateRemoteUid = uid);
+  }
+},
       onRemoteVideoStateChanged: (conn, uid, state, reason, elapsed) {
         final decoding = state == RemoteVideoState.remoteVideoStateDecoding ||
                          state == RemoteVideoState.remoteVideoStateStarting;
@@ -230,10 +238,18 @@ class _LiveVideoCallScreenState extends State<LiveVideoCallScreen> {
         });
       },
       onUserOffline: (conn, uid, reason) {
-        if (mounted) setState(() { _remoteUid = null; _remoteVideoDecoding = false; });
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted && _remoteUid == null) Navigator.pop(context);
-        });
+        if (conn.channelId == (widget.channelName ?? '')) {
+          if (mounted) setState(() {
+            _remoteUid = null;
+            _remoteVideoDecoding = false;
+          });
+          Future.delayed(const Duration(seconds: 2), () {
+            if (mounted && _remoteUid == null) Navigator.pop(context);
+          });
+        } else if (conn.channelId == _privateChannelId &&
+                  _pcState == _PCState.active) {
+          _onCallEndedByAstro();
+        }
       },
       onLeaveChannel: (conn, stats) {
         if (mounted) setState(() { _remoteUid = null; _remoteVideoDecoding = false; });
@@ -247,6 +263,8 @@ class _LiveVideoCallScreenState extends State<LiveVideoCallScreen> {
         audienceLatencyLevel: AudienceLatencyLevelType.audienceLatencyLevelLowLatency,
       ),
     );
+    await _engine.enableAudio();  // ✅ required for private call mic to work
+
     await _engine.enableVideo();
     await _engine.startPreview();
 
@@ -493,94 +511,97 @@ class _LiveVideoCallScreenState extends State<LiveVideoCallScreen> {
   }
 
   // Step 2: astrologer accepted → join private Agora channel + start wallet countdown
-  Future<void> _onCallAccepted() async {
-    if (mounted) setState(() => _pcState = _PCState.active);
 
-    // Join private audio channel (Communication profile, broadcaster so two-way audio)
-    _privateEngine = createAgoraRtcEngine();
-    await _privateEngine!.initialize(RtcEngineContext(appId: getAgoraAppId()));
-    await _privateEngine!.setChannelProfile(
-        ChannelProfileType.channelProfileCommunication);
-    await _privateEngine!.enableAudio();
-    await _privateEngine!.disableVideo();
-    await _privateEngine!.setDefaultAudioRouteToSpeakerphone(true);
-    await _privateEngine!.setEnableSpeakerphone(true);
 
-    _privateEngine!.registerEventHandler(RtcEngineEventHandler(
-      onJoinChannelSuccess: (conn, _) =>
-          log('[Private] ✅ Joined ${conn.localUid}'),
-      onUserOffline: (conn, uid, _) {
-        // Astrologer left the private channel → end from our side too
-        _onCallEndedByAstro();
-      },
-      onError: (code, msg) => log('[Private] ❌ $code $msg'),
-    ));
+ Future<void> _onCallAccepted() async {
+  if (mounted) setState(() => _pcState = _PCState.active);
 
-    await _privateEngine!.joinChannel(
-      token    : _privateToken,
-      channelId: _privateChannelId,
-      uid      : 1,
-      options  : const ChannelMediaOptions(
+  await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+  await _engine.enableAudio();
+  await _engine.enableLocalAudio(true);
+  await _engine.setDefaultAudioRouteToSpeakerphone(true);
+  await _engine.setEnableSpeakerphone(true);
+
+  _privateUid = DateTime.now().millisecondsSinceEpoch % 100000 + 2000;
+
+  try {
+    await (_engine as RtcEngineEx).joinChannelEx(
+      token     : _privateToken,
+      connection: RtcConnection(
+        channelId: _privateChannelId,
+        localUid : _privateUid!,
+      ),
+      options: const ChannelMediaOptions(
         publishMicrophoneTrack: true,
-        publishCameraTrack    : false,
-        clientRoleType        : ClientRoleType.clientRoleBroadcaster,
+        publishCameraTrack    : false,  // ✅ user does NOT publish camera
         autoSubscribeAudio    : true,
-        autoSubscribeVideo    : false,
+        autoSubscribeVideo    : true,   // ✅ user subscribes to astrologer video
+        clientRoleType        : ClientRoleType.clientRoleBroadcaster,
+        channelProfile        : ChannelProfileType.channelProfileCommunication,
       ),
     );
-
-    // ── Wallet countdown — same 3-tier Firebase formula as audio/video calls ──
-    _startWalletCountdown();
-
-    Fluttertoast.showToast(msg: '🔒 Private call connected');
+  } catch (e) {
+    log('[Private] ❌ joinChannelEx failed: $e');
+    await _engine.setClientRole(role: ClientRoleType.clientRoleAudience);
+    Fluttertoast.showToast(msg: 'Failed to connect private call');
+    if (mounted) setState(() { _pcState = _PCState.none; _privateChannelId = ''; });
+    return;
   }
 
-  // ── 3-tier wallet countdown (mirrors CountdownManager) ───────────────────
-  void _startWalletCountdown() {
-    _sessionSub?.cancel();
-    _countdownTick?.cancel();
+  _startWalletCountdown();
+  Fluttertoast.showToast(msg: '🔒 Private call connected');
+}
+ 
+ 
+ bool _countdownSynced = false;
 
-    final ref = FirebaseDatabase.instanceFor(
-      app: Firebase.app(), databaseURL: _dbUrl,
-    ).ref().child('CallSession').child(_privateChannelId);
 
-    // Local 1 Hz tick — immediately gives smooth UI countdown
-    _countdownTick = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      setState(() {
-        if (_secondsRemaining > 0) {
-          _secondsRemaining--;
-        } else {
-          _countdownTick?.cancel();
-          _endPrivateCall();
-        }
+void _startWalletCountdown() {
+  _sessionSub?.cancel();
+  _countdownTick?.cancel();
+  _countdownSynced = false;
+
+  final ref = FirebaseDatabase.instanceFor(
+    app: Firebase.app(), databaseURL: _dbUrl,
+  ).ref().child('CallSession').child(_privateChannelId);
+
+  _countdownTick = Timer.periodic(const Duration(seconds: 1), (_) {
+    if (!mounted) return;
+    setState(() {
+      if (!_countdownSynced) return;
+      if (_secondsRemaining > 0) {
+        _secondsRemaining--;
+      } else {
+        _countdownTick?.cancel();
+        _endPrivateCall();
+      }
+    });
+  });
+
+  _sessionSub = ref.onValue.listen((event) {
+    if (!mounted || event.snapshot.value == null) return;
+    final data   = Map<String, dynamic>.from(event.snapshot.value as Map);
+    final status = data['status'] as String? ?? '';
+
+    if (['end_astro', 'end_user', 'wallet_empty'].contains(status)) {
+      _onCallEndedByAstro();
+      return;
+    }
+
+    final accurate = _computeAccurateSecs(data);
+    if (accurate == null) return;
+
+    if (!_countdownSynced || (_secondsRemaining - accurate).abs() > 10) {
+      if (mounted) setState(() {
+        _secondsRemaining = accurate;
+        _countdownSynced  = true;
       });
-    });
-
-    // Firebase sync — server is the source of truth, drift-correct if > 10 s off
-    _sessionSub = ref.onValue.listen((event) {
-      if (!mounted || event.snapshot.value == null) return;
-      final data   = Map<String, dynamic>.from(event.snapshot.value as Map);
-      final status = data['status'] as String? ?? '';
-
-      // Server ended the call (wallet empty / astrologer ended)
-      if (['end_astro', 'end_user', 'wallet_empty'].contains(status)) {
-        _onCallEndedByAstro();
-        return;
-      }
-
-      // Compute server-accurate seconds (3-tier)
-      final accurate = _computeAccurateSecs(data);
-      if (accurate == null) return;
-
-      // Drift-correct only if more than 10 s off
-      if ((_secondsRemaining - accurate).abs() > 10) {
-        if (mounted) setState(() => _secondsRemaining = accurate);
-      }
-    });
-  }
+    }
+  });
+}
 
   // Mirrors the same formula used in AudioCallScreen / CountdownManager
+ // Mirrors the same formula used in AudioCallScreen / CountdownManager
   int? _computeAccurateSecs(Map<String, dynamic> data) {
     final nowMs    = DateTime.now().millisecondsSinceEpoch;
     final rawMax   = data['max_minutes'];
@@ -597,16 +618,15 @@ class _LiveVideoCallScreenState extends State<LiveVideoCallScreen> {
       return maxSec;
     }
 
-    // Tier 2: started_at (before first debit tick)
+    // Tier 2: started_at only (before first debit tick) — no rate info yet,
+    // so just report elapsed time as a placeholder; first real debit tick
+    // will correct this via Tier 1 on the next Firebase update.
     if (rawStart != null) {
-      final elapsed = ((nowMs - (int.tryParse(rawStart.toString()) ?? nowMs)) / 1000).floor();
-      // Fall back to current countdown if no rate info
-      return (_secondsRemaining - elapsed).clamp(0, _secondsRemaining);
+      return 300; // 5-minute placeholder until first debit tick arrives
     }
 
     return null;
   }
-
   void _onCallEndedByAstro() {
     Fluttertoast.showToast(msg: 'Private call ended');
     _cleanupPrivateCall();
@@ -661,17 +681,75 @@ class _LiveVideoCallScreenState extends State<LiveVideoCallScreen> {
     if (mounted) setState(() { _pcState = _PCState.none; _privateChannelId = ''; });
   }
 
-  void _cleanupPrivateCall() {
-    _releasePrivateEngine();
-    _privateChannelId = '';
-    _privateMicMuted  = false;
+  // void _cleanupPrivateCall() {
+  //   _releasePrivateEngine();
+  //   _privateChannelId = '';
+  //   _privateMicMuted  = false;
+  // }
+void _cleanupPrivateCall() {
+  if (_privateChannelId.isNotEmpty && _privateUid != null) {
+    try {
+      (_engine as RtcEngineEx).leaveChannelEx(
+        connection: RtcConnection(
+          channelId: _privateChannelId,
+          localUid : _privateUid!,
+        ),
+      );
+    } catch (e) { log('[Private] ❌ leaveChannelEx failed: $e'); }
   }
 
-  Future<void> _togglePrivateMic() async {
-    _privateMicMuted = !_privateMicMuted;
-    await _privateEngine?.muteLocalAudioStream(_privateMicMuted);
-    if (mounted) setState(() {});
+  _engine.setClientRole(role: ClientRoleType.clientRoleAudience);
+  _engine.setEnableSpeakerphone(false);
+
+  _privateUid       = null;
+  _privateChannelId = '';
+  _privateMicMuted  = false;
+  _privateRemoteUid = null;  // ✅ clear private video
+
+  Future(() async {
+    try {
+      await _engine.leaveChannel();
+      await Future.delayed(const Duration(milliseconds: 400));
+      final token = await _fetchAgoraToken(widget.channelName ?? '');
+      await _engine.joinChannel(
+        token    : token,
+        channelId: widget.channelName ?? '',
+        uid      : 0,
+        options  : const ChannelMediaOptions(
+          publishCameraTrack    : false,
+          publishMicrophoneTrack: false,
+          clientRoleType        : ClientRoleType.clientRoleAudience,
+          autoSubscribeVideo    : true,
+          autoSubscribeAudio    : true,
+        ),
+      );
+      log('[Private] ✅ Rejoined public stream');
+    } catch (e) {
+      log('[Private] ❌ rejoin public stream failed: $e');
+    }
+  });
+}
+
+Future<void> _togglePrivateMic() async {
+  _privateMicMuted = !_privateMicMuted;
+  if (_privateChannelId.isNotEmpty && _privateUid != null) {
+    try {
+      final engineEx = _engine as RtcEngineEx;
+      await engineEx.updateChannelMediaOptionsEx(
+        options: ChannelMediaOptions(
+          publishMicrophoneTrack: !_privateMicMuted,
+        ),
+        connection: RtcConnection(
+          channelId: _privateChannelId,
+          localUid : _privateUid!,
+        ),
+      );
+    } catch (e) {
+      log('[Private] ❌ togglePrivateMic failed: $e');
+    }
   }
+  if (mounted) setState(() {});
+}
 
   void _releasePrivateEngine() {
     try { _privateEngine?.leaveChannel(); } catch (_) {}
@@ -1100,7 +1178,7 @@ class _BottomSection extends StatelessWidget {
             icon : Icons.near_me_outlined,
             faded: true,
             onTap: () => Share.share(
-                'https://play.google.com/store/apps/details?id=com.user.astrogurujii'),
+                'https://play.google.com/store/apps/details?id=com.app.vaidikguru'),
           ),
           const SizedBox(height: 14),
           _RailIcon(

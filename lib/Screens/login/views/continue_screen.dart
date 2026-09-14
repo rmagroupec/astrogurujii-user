@@ -22,8 +22,8 @@ class _ContinueScreenState extends State<ContinueScreen> {
   double _rotation = 0.0;
   double _rotationb = 0.0;
   final double _rotationSpeed = 0.05; // Adjust this value to change rotation speed
-  var terms = "https://admin.astrogurujii.com/links/termandcondition";
-  var privacy = "https://admin.astrogurujii.com/links/privacypolicy";
+  var terms = "https://admin.vaidikguru.com/links/termandcondition";
+  var privacy = "https://admin.vaidikguru.com/links/privacypolicy";
   @override
   void initState() {
     super.initState();
@@ -100,7 +100,7 @@ class _ContinueScreenState extends State<ContinueScreen> {
             SizedBox(
               height: 10,
             ),
-            Image.asset("assets/images/name_astro_guruji.png",width: Get.width*0.6,),
+            Image.asset("assets/image/logo1234.png",width: Get.width*0.6,),
             Padding(
               padding: const EdgeInsets.only(top: 20,left: 20,right: 20),
               child: ElevatedButton(

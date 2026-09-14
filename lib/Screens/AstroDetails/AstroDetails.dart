@@ -291,7 +291,7 @@ class _AstroDetailsState extends State<AstroDetails> {
             InkWell(
               onTap: () {
                 Share.share(
-                    'https://play.google.com/store/apps/details?id=com.user.astrogurujii');
+                    'https://play.google.com/store/apps/details?id=com.app.vaidikguru');
               },
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
@@ -1385,7 +1385,7 @@ class _AstroDetailsState extends State<AstroDetails> {
                                                     fontWeight: FontWeight.w400,
                                                     fontSize: 12,
                                                     letterSpacing: -0.3,
-                                                    color: whiteColor)),
+                                                    color: primaryColor)),
                                           )),
                                     )
                                   ],
@@ -2233,172 +2233,213 @@ CustomText(
   }
 
   ///Rating & Review Card
-  Widget ratingCard() {
-    return ListView.builder(
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: (data[0].rating!.length > 5) ? 5 : data[0].rating!.length,
-        shrinkWrap: true,
-        itemBuilder: (context, index) {
-          print(
-              "ffffffff===>>> ${data[0].rating![index].profileImg.toString()}");
-          return Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(5),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Colors.grey,
-                      offset: Offset(0.0, 1.0), //(x,y)
-                      blurRadius: 4.0,
-                    ),
-                  ],
-                ),
-                child: Stack(
-                  alignment: Alignment.topRight,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: <Widget>[
-                              Expanded(
-                                  flex: 1,
-                                  child: CircleAvatar(
-                                      radius: 30,
-                                      backgroundImage: data[0]
-                                                  .rating![index]
-                                                  .profileImg
-                                                  .toString() ==
-                                              ""
-                                          ? AssetImage(
-                                              "assets/images/demoPic.jpg")
-                                          : NetworkImage(data[0]
-                                              .rating![index]
-                                              .profileImg
-                                              .toString()))),
-                              SizedBox(width: 23.0),
-                              Expanded(
-                                flex: 4,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  children: <Widget>[
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        SizedBox(
-                                          child: CustomText(
-                                            fontSize: 16.0,
-                                            text:
-                                                "${data[0].rating![index].name.toString()}",
-                                            fontWeight: FontWeight.w500,
-                                            color: ColorData.color000000,
-                                            maxLines: 3,
+///Rating & Review Card
+Widget ratingCard() {
+  return ListView.builder(
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: (data[0].rating!.length > 5) ? 5 : data[0].rating!.length,
+      shrinkWrap: true,
+      itemBuilder: (context, index) {
+        final ratingItem = data[0].rating![index];
+
+        // 👇 Adjust this to match your model's actual field name
+        final String? astroReply = ratingItem.astr_comment;
+        final bool hasReply = astroReply != null && astroReply.trim().isNotEmpty;
+
+        return Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(5),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.grey,
+                    offset: Offset(0.0, 1.0), //(x,y)
+                    blurRadius: 4.0,
+                  ),
+                ],
+              ),
+              child: Stack(
+                alignment: Alignment.topRight,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: <Widget>[
+                            Expanded(
+                                flex: 1,
+                                child: CircleAvatar(
+                                    radius: 30,
+                                    backgroundImage: ratingItem.profileImg
+                                                .toString() ==
+                                            ""
+                                        ? AssetImage(
+                                            "assets/images/demoPic.jpg")
+                                        : NetworkImage(ratingItem
+                                            .profileImg
+                                            .toString()) as ImageProvider)),
+                            SizedBox(width: 23.0),
+                            Expanded(
+                              flex: 4,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                children: <Widget>[
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(
+                                        child: CustomText(
+                                          fontSize: 16.0,
+                                          text:
+                                              "${ratingItem.name.toString()}",
+                                          fontWeight: FontWeight.w500,
+                                          color: ColorData.color000000,
+                                          maxLines: 3,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 7.0),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: <Widget>[
+                                      stars(
+                                          double.parse(ratingItem
+                                              .rating
+                                              .toString()),
+                                          11.0),
+                                    ],
+                                  ),
+                                  SizedBox(
+                                    height: 5,
+                                  ),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        child: CustomText(
+                                          fontSize: 13.0,
+                                          text: ratingItem
+                                                      .review
+                                                      .toString() ==
+                                                  ""
+                                              ? "No Review"
+                                              : ratingItem
+                                                  .review
+                                                  .toString(),
+                                          fontWeight: FontWeight.w400,
+                                          color: ColorData.color747474,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: CustomText(
+                                          text:
+                                              "${ratingItem.createdDate.toString()}",
+                                          color: ColorData.color727272,
+                                          fontWeight: FontWeight.w300,
+                                          fontSize: 12.0,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  /// 👇 Astrologer reply block
+                                  if (hasReply) ...[
+                                    SizedBox(height: 10),
+                                    Container(
+                                      width: double.infinity,
+                                      padding: const EdgeInsets.all(10),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade100,
+                                        borderRadius:
+                                            BorderRadius.circular(8),
+                                        border: Border(
+                                          left: BorderSide(
+                                            color: primaryColor,
+                                            width: 3,
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                    SizedBox(height: 7.0),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: <Widget>[
-                                        stars(
-                                            double.parse(data[0]
-                                                .rating![index]
-                                                .rating
-                                                .toString()),
-                                            11.0),
-                                      ],
-                                    ),
-                                    SizedBox(
-                                      height: 5,
-                                    ),
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Expanded(
-                                          child: CustomText(
-                                            fontSize: 13.0,
-                                            text: data[0]
-                                                        .rating![index]
-                                                        .review
-                                                        .toString() ==
-                                                    ""
-                                                ? "No Review"
-                                                : data[0]
-                                                    .rating![index]
-                                                    .review
-                                                    .toString(),
-                                            //text: "dsd",
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: [
+                                              Icon(
+                                                Icons.reply,
+                                                size: 14,
+                                                color: primaryColor,
+                                              ),
+                                              SizedBox(width: 5),
+                                              CustomText(
+                                                text:
+                                                    "${widget.astroLogerName ?? 'Astrologer'}'s reply",
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.bold,
+                                                color: primaryColor,
+                                              ),
+                                            ],
+                                          ),
+                                          SizedBox(height: 4),
+                                          CustomText(
+                                            text: astroReply!,
+                                            fontSize: 13,
                                             fontWeight: FontWeight.w400,
                                             color: ColorData.color747474,
                                           ),
-                                        ),
-                                        Expanded(
-                                          child: CustomText(
-                                            text:
-                                                "${data[0].rating![index].createdDate.toString()}",
-                                            color: ColorData.color727272,
-                                            fontWeight: FontWeight.w300,
-                                            fontSize: 12.0,
-                                          ),
-                                        ),
-                                      ],
-                                    )
+                                        ],
+                                      ),
+                                    ),
                                   ],
-                                ),
-                              )
-                            ],
-                          ),
-                        ],
-                      ),
+                                ],
+                              ),
+                            )
+                          ],
+                        ),
+                      ],
                     ),
-                    Container(
-                      child: PopupMenuButton<String?>(
-                        padding: EdgeInsets.zero,
-
-                        onSelected: (value) {
-                          // Handle your action
-                          switch (value) {
-                            case 'Report and review':
-                              // Implement your logic for Report and block
-                              print('Report and review');
-                              break;
-                            default:
-                              print('Unknown');
-                          }
-                        },
-                        itemBuilder: (BuildContext context) =>
-                            <PopupMenuEntry<String?>>[
-                          const PopupMenuItem<String?>(
-                            value: 'Report and review',
-                            child: Text('Report and review'),
-                          ),
-                          // const PopupMenuItem<String?>(
-                          //   value: 'Follow',
-                          //   child: Text('Follow'),
-                          // ),
-                        ],
-                        icon: const Icon(Icons.more_vert), // Three dot icon
-                      ),
-                    )
-                  ],
-                )),
-          );
-        });
-  }
+                  ),
+                  Container(
+                    child: PopupMenuButton<String?>(
+                      padding: EdgeInsets.zero,
+                      onSelected: (value) {
+                        switch (value) {
+                          case 'Report and review':
+                            print('Report and review');
+                            break;
+                          default:
+                            print('Unknown');
+                        }
+                      },
+                      itemBuilder: (BuildContext context) =>
+                          <PopupMenuEntry<String?>>[
+                        const PopupMenuItem<String?>(
+                          value: 'Report and review',
+                          child: Text('Report and review'),
+                        ),
+                      ],
+                      icon: const Icon(Icons.more_vert),
+                    ),
+                  )
+                ],
+              )),
+        );
+      });
+}
 
   ///Stars
   Widget stars(double rating, double size) {

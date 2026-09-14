@@ -55,19 +55,19 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
                 ),
               ),
               SizedBox(width: screenWidth * 0.05),
-              Container(
-                padding: const EdgeInsets.all(5),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Image.asset(
-                  logoPath,
-                  height: 25,
-                  width: 25,
-                  fit: BoxFit.contain,
-                ),
-              ),
+              // Container(
+              //   padding: const EdgeInsets.all(5),
+              //   decoration: BoxDecoration(
+              //     color: Colors.white,
+              //     borderRadius: BorderRadius.circular(20),
+              //   ),
+              //   child: Image.asset(
+              //     logoPath,
+              //     height: 25,
+              //     width: 25,
+              //     fit: BoxFit.contain,
+              //   ),
+              // ),
             ],
           );
         },
@@ -78,8 +78,8 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
       elevation: 0,
       backgroundColor: backgroundColor,
       title: Image.asset(
-        titleImagePath,
-        height: 20,
+        logoPath,
+        height: 50,
         width: screenWidth * 0.3,
       ),
       actions: [

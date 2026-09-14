@@ -137,7 +137,7 @@
 
 //   void _shareApp() {
 //     Share.share(
-//         'https://play.google.com/store/apps/details?id=com.user.astrogurujii&hl=en_IN');
+//         'https://play.google.com/store/apps/details?id=com.app.vaidikguru&hl=en_IN');
 //   }
 
 //   void _onPhoneTap() {

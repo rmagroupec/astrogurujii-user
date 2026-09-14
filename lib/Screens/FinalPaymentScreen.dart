@@ -124,7 +124,7 @@ class _FinalPaymentScreenState extends State<FinalPaymentScreen> {
       'amount': amount,
       'currency': widget.currency,
       // 'image':'assets/images/AstroGurijiIcon.png',
-      'image':'https://admin.astrogurujii.com/logo/app_logo.png',
+      'image':'https://admin.vaidikguru.com/logo/app_logo.png',
 
       // 'name': _prefs.getString("name"),
       'name':"ASTROGURUJII",

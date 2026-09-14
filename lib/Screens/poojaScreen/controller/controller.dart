@@ -511,7 +511,7 @@ class PoojaController extends GetxController {
       // 'amount': amount,
       'currency': "INR",
       // 'image':'assets/images/AstroGurijiIcon.png',
-      'image':'https://admin.astrogurujii.com/logo/app_logo.png',
+      'image':'https://admin.vaidikguru.com/logo/app_logo.png',
 
       // 'name': _prefs.getString("name"),
       'name':"ASTROGURUJII",

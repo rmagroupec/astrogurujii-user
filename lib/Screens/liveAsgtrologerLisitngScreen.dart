@@ -164,7 +164,30 @@ class _LiveAstroLogersScreenState extends State<LiveAstroLogersScreen>
                   ],
                 ),
               ),
-              const Tab(text: "Upcoming"),
+               Tab(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.red.withOpacity(0.6),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Text("Upcoming"),
+                  ],
+                ),
+              ),
+             
             ],
           ),
         ),
@@ -315,6 +338,16 @@ class _LiveAstroLogersScreenState extends State<LiveAstroLogersScreen>
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF1A1A2E),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                     Text(
+                      astro.title.toString() ,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,

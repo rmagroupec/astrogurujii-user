@@ -189,7 +189,7 @@ class HttpServices {
   Future<PoojaModel?> poojaListingApi(Map<String, String> data) async {
     print("hello1.1");
     // Map reqBody = {};
-    String url = "https://admin.astrogurujii.com/puja/pujalisting";
+    String url = "https://admin.vaidikguru.com/puja/pujalisting";
     //  final response=await _apiHelper.post('user_api/login', reqBody);
     final response = await _apiHelper.postN(data, url);
     try {
@@ -203,7 +203,7 @@ class HttpServices {
 
   Future<PoojaDetailModel?> poojaDetailsApi(String instaId) async {
     Map reqBody = {"instaId": instaId.toString()};
-    String url = "https://admin.astrogurujii.com/puja/pujabyinstaid";
+    String url = "https://admin.vaidikguru.com/puja/pujabyinstaid";
 
     //  final response=await _apiHelper.post('user_api/login', reqBody);
     final response = await _apiHelper.postN(reqBody, url);
@@ -234,7 +234,7 @@ class HttpServices {
       //"user_id":"657ad5aca6d5df2db90465ad"
     };
 
-    String url = "https://admin.astrogurujii.com/puja/bookpuja";
+    String url = "https://admin.vaidikguru.com/puja/bookpuja";
 
     //  final response=await _apiHelper.post('user_api/login', reqBody);
     final response = await _apiHelper.postN(reqBody, url);
@@ -461,7 +461,7 @@ class HttpServices {
     });
     try {
       Response response = await dio.post(
-        'https://admin.astrogurujii.com/user_api/upload_mp3_file',
+        'https://admin.vaidikguru.com/user_api/upload_mp3_file',
         data: data,
 
       );
@@ -493,7 +493,7 @@ class HttpServices {
     });
     try {
       Response response = await dio.post(
-        'https://admin.astrogurujii.com/user_api/upload_a_file',
+        'https://admin.vaidikguru.com/user_api/upload_a_file',
         data: data,
       );
       return UploadImageModel.fromJson(response.data);
@@ -524,7 +524,7 @@ class HttpServices {
     });
     try {
       Response response = await dio.post(
-        'https://admin.astrogurujii.com/user_api/profile_update_img',
+        'https://admin.vaidikguru.com/user_api/profile_update_img',
         data: data,
       );
       return UploadImageModel.fromJson(response.data);

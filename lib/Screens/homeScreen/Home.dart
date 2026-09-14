@@ -100,9 +100,9 @@ class _HomeState extends State<Home> {
   bool isSelected = true;
   final bool _flexibleUpdateAvailable = false;
   var walletAmount = "";
-  var terms = "https://admin.astrogurujii.com/links/termandcondition";
-  var privacy = "https://admin.astrogurujii.com/links/privacypolicy";
-  var aboutus = "https://admin.astrogurujii.com/links/aboutus";
+  var terms = "https://admin.vaidikguru.com/links/termandcondition";
+  var privacy = "https://admin.vaidikguru.com/links/privacypolicy";
+  var aboutus = "https://admin.vaidikguru.com/links/aboutus";
   var contactus = "https://api.astrogurujii.com/links/contactus";
   var shipinganddelivery =
       "https://api.astrogurujii.com/links/shipinganddelivery";
@@ -604,7 +604,7 @@ Future<bool> _showCloseDialog(BuildContext context) async {
           height: 62.0,
           backgroundColor: const Color(0xffFC7601),
           iconColor: Colors.white,
-          logoPath: 'assets/image/astro-logo-apbar.png',
+          logoPath: 'assets/image/logo1234.png',
           titleImagePath: 'assets/images/name_astro_guruji.png',
           walletIconPath: 'assets/icon/wallet_icon_toolbar.png',
           supportIconPath: 'assets/icon/support_toolbar_icon.png',
@@ -706,7 +706,7 @@ Future<bool> _showCloseDialog(BuildContext context) async {
       },
           onReferTap: () {
       Share.share(
-      'https://play.google.com/store/apps/details?id=com.user.astrogurujii');
+      'https://play.google.com/store/apps/details?id=com.app.vaidikguru');
       },
           onAboutUsTap: () {
       Navigator.push(
@@ -1246,7 +1246,7 @@ Future<bool> _showCloseDialog(BuildContext context) async {
     
     
     
-                  Padding(
+                 liveAstrologersList.length >= 1 ? Padding(
                     padding: const EdgeInsets.all(10.0),
                     child: Row(
                       children: <Widget>[
@@ -1274,7 +1274,7 @@ Future<bool> _showCloseDialog(BuildContext context) async {
                         )
                       ],
                     ),
-                  ),
+                  ) : SizedBox(),
                   LiveAstrologerCard(liveAstrologersList:liveAstrologersList,),
                   SizedBox(
                     height: 10,

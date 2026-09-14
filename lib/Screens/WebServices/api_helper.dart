@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class ApiBaseHelper {
   //String aPPmAINuRL = "https://admin.astropush.com/";
   //String aPPmAINuRL = "https://api.astrogurujii.com/";
-  String aPPmAINuRL = "https://admin.astrogurujii.com/";
+  String aPPmAINuRL = "https://admin.vaidikguru.com/";
  // String aPPmAINuRL = "http://15.206.212.188:4000/";
 
   _authFailure() {}

@@ -297,6 +297,26 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
 
   int crauselIndex=0;
 
+  Widget _filterTabItem(String tabKey, String label, StateSetter setModalState) {
+  return Container(
+    height: 60,
+    color: (_selectedTab == tabKey) ? Colors.white : Colors.black12,
+    child: InkWell(
+      onTap: () {
+        setModalState(() {
+          _selectedTab = tabKey;
+        });
+      },
+      child: Center(
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 16, color: Colors.black),
+        ),
+      ),
+    ),
+  );
+}
+
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
@@ -401,321 +421,135 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
               width: 10,
             ),
             InkWell(
-                onTap: () {
-                  // showCupertinoModalBottomSheet(
-                  //     context: context,
-                  //     builder: (context) {
-                  //       return StatefulBuilder(builder:
-                  //           (BuildContext context,
-                  //           StateSetter setState) {
-                  //         _setState = setState;
-                  //         return Scaffold(
-                  //           body: SafeArea(
-                  //             child: Column(
-                  //               children: [
-                  //                 Expanded(
-                  //                   child: SingleChildScrollView(
-                  //                     child: Column(
-                  //                       children: [
-                  //                         Padding(
-                  //                           padding:
-                  //                           const EdgeInsets.all(
-                  //                               8.0),
-                  //                           child: Row(
-                  //                             crossAxisAlignment:
-                  //                             CrossAxisAlignment
-                  //                                 .start,
-                  //                             mainAxisAlignment:
-                  //                             MainAxisAlignment
-                  //                                 .spaceAround,
-                  //                             children: [
-                  //                               Text(
-                  //                                 "Filter",
-                  //                                 style: TextStyle(
-                  //                                   fontSize: 16,
-                  //                                   color: blackColor,
-                  //                                 ),
-                  //                               ),
-                  //                               InkWell(
-                  //                                 onTap: () {
-                  //                                   for (int i = 0;
-                  //                                   i <
-                  //                                       skill
-                  //                                           .length;
-                  //                                   i++) {
-                  //                                     setState(() {
-                  //                                       skill[i].status =
-                  //                                       false;
-                  //                                     });
-                  //                                   }
-                  //                                   for (int i = 0;
-                  //                                   i <
-                  //                                       language
-                  //                                           .length;
-                  //                                   i++) {
-                  //                                     setState(() {
-                  //                                       language[i]
-                  //                                           .status =
-                  //                                       false;
-                  //                                     });
-                  //                                   }
-    
-                  //                                   for (int i = 0;
-                  //                                   i <
-                  //                                       gender
-                  //                                           .length;
-                  //                                   i++) {
-                  //                                     setState(() {
-                  //                                       gender[i]
-                  //                                           .status =
-                  //                                       false;
-                  //                                     });
-                  //                                   }
-    
-                  //                                   for (int i = 0;
-                  //                                   i < sort.length;
-                  //                                   i++) {
-                  //                                     setState(() {
-                  //                                       sort[i].status =
-                  //                                       false;
-                  //                                     });
-                  //                                   }
-                  //                                 },
-                  //                                 child: Text(
-                  //                                   "CLEAR",
-                  //                                   style: TextStyle(
-                  //                                     fontSize: 16,
-                  //                                     color:
-                  //                                     Colors.black,
-                  //                                   ),
-                  //                                 ),
-                  //                               ),
-                  //                             ],
-                  //                           ),
-                  //                         ),
-                  //                         Divider(
-                  //                           color: Colors.grey,
-                  //                         ),
-                  //                         Row(
-                  //                           mainAxisAlignment:
-                  //                           MainAxisAlignment
-                  //                               .spaceBetween,
-                  //                           crossAxisAlignment:
-                  //                           CrossAxisAlignment
-                  //                               .start,
-                  //                           children: [
-                  //                             Expanded(
-                  //                               flex: 1,
-                  //                               child: Padding(
-                  //                                 padding:
-                  //                                 const EdgeInsets
-                  //                                     .all(0.0),
-                  //                                 child: Column(
-                  //                                   children: [
-                  //                                     ///Skill
-                  //                                     Container(
-                  //                                       height: 60,
-                  //                                       color: (_selectedTab ==
-                  //                                           "skill")
-                  //                                           ? Colors
-                  //                                           .white
-                  //                                           : Colors
-                  //                                           .black12,
-                  //                                       child: InkWell(
-                  //                                         onTap: () {
-                  //                                           setState(
-                  //                                                   () {
-                  //                                                 _selectedTab =
-                  //                                                 "skill";
-                  //                                               });
-                  //                                         },
-                  //                                         child: Center(
-                  //                                           child: Text(
-                  //                                             "Skill",
-                  //                                             style:
-                  //                                             TextStyle(
-                  //                                               fontSize:
-                  //                                               16,
-                  //                                               color: Colors
-                  //                                                   .black,
-                  //                                             ),
-                  //                                           ),
-                  //                                         ),
-                  //                                       ),
-                  //                                     ),
-    
-                  //                                     ///language
-                  //                                     Container(
-                  //                                       color: (_selectedTab ==
-                  //                                           "language")
-                  //                                           ? Colors
-                  //                                           .white
-                  //                                           : Colors
-                  //                                           .black12,
-                  //                                       height: 60,
-                  //                                       child: InkWell(
-                  //                                         onTap: () {
-                  //                                           setState(
-                  //                                                   () {
-                  //                                                 _selectedTab =
-                  //                                                 "language";
-                  //                                               });
-                  //                                         },
-                  //                                         child: Center(
-                  //                                           child: Text(
-                  //                                             "Languages",
-                  //                                             style:
-                  //                                             TextStyle(
-                  //                                               fontSize:
-                  //                                               16,
-                  //                                               color: Colors
-                  //                                                   .black,
-                  //                                             ),
-                  //                                           ),
-                  //                                         ),
-                  //                                       ),
-                  //                                     ),
-    
-                  //                                     ///Gender
-                  //                                     Container(
-                  //                                       color: (_selectedTab ==
-                  //                                           "gender")
-                  //                                           ? Colors
-                  //                                           .white
-                  //                                           : Colors
-                  //                                           .black12,
-                  //                                       height: 60,
-                  //                                       child: InkWell(
-                  //                                         onTap: () {
-                  //                                           setState(
-                  //                                                   () {
-                  //                                                 _selectedTab =
-                  //                                                 "gender";
-                  //                                               });
-                  //                                         },
-                  //                                         child: Center(
-                  //                                           child: Text(
-                  //                                             "Gender",
-                  //                                             style:
-                  //                                             TextStyle(
-                  //                                               fontSize:
-                  //                                               16,
-                  //                                               color: Colors
-                  //                                                   .black,
-                  //                                             ),
-                  //                                           ),
-                  //                                         ),
-                  //                                       ),
-                  //                                     ),
-    
-                  //                                     ///SortBy
-                  //                                     Container(
-                  //                                       color: (_selectedTab ==
-                  //                                           "sort")
-                  //                                           ? Colors
-                  //                                           .white
-                  //                                           : Colors
-                  //                                           .black12,
-                  //                                       height: 60,
-                  //                                       child: InkWell(
-                  //                                         onTap: () {
-                  //                                           setState(
-                  //                                                   () {
-                  //                                                 _selectedTab =
-                  //                                                 "sort";
-                  //                                               });
-                  //                                         },
-                  //                                         child: Center(
-                  //                                           child: Text(
-                  //                                             "Sort by",
-                  //                                             style:
-                  //                                             TextStyle(
-                  //                                               fontSize:
-                  //                                               16,
-                  //                                               color: Colors
-                  //                                                   .black,
-                  //                                             ),
-                  //                                           ),
-                  //                                         ),
-                  //                                       ),
-                  //                                     ),
-                  //                                   ],
-                  //                                 ),
-                  //                               ),
-                  //                             ),
-                  //                             Expanded(
-                  //                                 flex: 2,
-                  //                                 child:
-                  //                                 _widgetfilter()),
-                  //                           ],
-                  //                         )
-                  //                       ],
-                  //                     ),
-                  //                   ),
-                  //                 ),
-                  //                 Container(
-                  //                   color: Colors.white,
-                  //                   padding: EdgeInsets.all(5),
-                  //                   child: Row(
-                  //                     crossAxisAlignment:
-                  //                     CrossAxisAlignment.start,
-                  //                     mainAxisAlignment:
-                  //                     MainAxisAlignment.spaceAround,
-                  //                     children: [
-                  //                       Container(
-                  //                         width: (MediaQuery.of(context)
-                  //                             .size
-                  //                             .width -
-                  //                             MediaQuery.of(context)
-                  //                                 .padding
-                  //                                 .left -
-                  //                             MediaQuery.of(context)
-                  //                                 .padding
-                  //                                 .right) *
-                  //                             0.45,
-                  //                         child: ButtonTheme(
-                  //                           child: PrimaryButton(
-                  //                             title: 'CLOSE',
-                  //                             onPressed: () => {
-                  //                               Navigator.pop(context)
-                  //                             },
-                  //                           ),
-                  //                         ),
-                  //                       ),
-                  //                       Container(
-                  //                         width: (MediaQuery.of(context)
-                  //                             .size
-                  //                             .width -
-                  //                             MediaQuery.of(context)
-                  //                                 .padding
-                  //                                 .left -
-                  //                             MediaQuery.of(context)
-                  //                                 .padding
-                  //                                 .right) *
-                  //                             0.45,
-                  //                         child: ButtonTheme(
-                  //                           child: PrimaryButton(
-                  //                             title: 'APPLY',
-                  //                             onPressed: () =>
-                  //                             {applyFilter()},
-                  //                           ),
-                  //                         ),
-                  //                       ),
-                  //                     ],
-                  //                   ),
-                  //                 )
-                  //               ],
-                  //             ),
-                  //           ),
-                  //         );
-                  //       });
-                  //     });
-                },
-                child: SvgPicture.asset(
-                  'assets/astro/filter.svg',
-                  height: 20,
-                  color: whiteColor,
-                )),
+  onTap: () {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            _setState = setModalState;
+            return SizedBox(
+              height: MediaQuery.of(context).size.height * 0.7,
+              child: Scaffold(
+                body: SafeArea(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                  children: [
+                                    Text(
+                                      "Filter",
+                                      style: TextStyle(fontSize: 16, color: blackColor),
+                                    ),
+                                    InkWell(
+                                      onTap: () {
+                                        setModalState(() {
+                                          for (int i = 0; i < skill.length; i++) {
+                                            skill[i].status = false;
+                                          }
+                                          for (int i = 0; i < language.length; i++) {
+                                            language[i].status = false;
+                                          }
+                                          for (int i = 0; i < gender.length; i++) {
+                                            gender[i].status = false;
+                                          }
+                                          for (int i = 0; i < sort.length; i++) {
+                                            sort[i].status = false;
+                                          }
+                                        });
+                                      },
+                                      child: const Text(
+                                        "CLEAR",
+                                        style: TextStyle(fontSize: 16, color: Colors.black),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Divider(color: Colors.grey),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    flex: 1,
+                                    child: Column(
+                                      children: [
+                                        _filterTabItem("skill", "Skill", setModalState),
+                                        _filterTabItem("language", "Languages", setModalState),
+                                        _filterTabItem("gender", "Gender", setModalState),
+                                        _filterTabItem("sort", "Sort by", setModalState),
+                                      ],
+                                    ),
+                                  ),
+                                  Expanded(flex: 2, child: _widgetfilter()),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.all(5),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceAround,
+                          children: [
+                            SizedBox(
+                              width: (MediaQuery.of(context).size.width -
+                                      MediaQuery.of(context).padding.left -
+                                      MediaQuery.of(context).padding.right) *
+                                  0.45,
+                              child: ButtonTheme(
+                                child: PrimaryButton(
+                                  title: 'CLOSE',
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                              ),
+                            ),
+                            SizedBox(
+                              width: (MediaQuery.of(context).size.width -
+                                      MediaQuery.of(context).padding.left -
+                                      MediaQuery.of(context).padding.right) *
+                                  0.45,
+                              child: ButtonTheme(
+                                child: PrimaryButton(
+                                  title: 'APPLY',
+                                  onPressed: () => applyFilter(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  },
+  child: SvgPicture.asset(
+    'assets/astro/filter.svg',
+    height: 20,
+    color: whiteColor,
+  ),
+),
             const SizedBox(
               width: 10,
             ),

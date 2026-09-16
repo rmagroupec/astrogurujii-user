@@ -172,11 +172,23 @@ class _PoojaDetailScreenState extends State<PoojaDetailScreen> {
       body: GetBuilder(
         init: PoojaController(),
         builder: (controller) {
-           return screenController.poojaDetailsLoading.value == true
-              ? Center(child: Loading())
-              : Padding(
-                  padding: const EdgeInsets.all(0.0),
-                  child: SingleChildScrollView(
+          return screenController.poojaDetailsLoading.value == true
+    ? Center(child: Loading())
+    : (screenController.poojaDetailModel == null ||
+            screenController.poojaDetailModel!.data == null)
+        ? Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Text(
+                "Could not load this puja. Please go back and try again.",
+                textAlign: TextAlign.center,
+              ),
+            ),
+          )
+        : Padding(
+            padding: const EdgeInsets.all(0.0),
+            child: SingleChildScrollView(
+              // ...rest exactly as before, unchanged
                     physics: BouncingScrollPhysics(),
                     child: SafeArea(
                       child: Container(
@@ -305,29 +317,20 @@ class _PoojaDetailScreenState extends State<PoojaDetailScreen> {
                     Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => ReviewAndCheckout(
-                            bannerList: screenController
-                                .poojaDetailModel!.data!.bannerImages!,
-                            date: "${widget.onlyDate} ${widget.onlyMonth}",
-                            packageAmount: screenController.poojaDetailModel!
-                                .data!.packages![selcetdpackage].packagePrice
-                                .toString(),
-                            packageName: screenController.poojaDetailModel!
-                                .data!.packages![selcetdpackage].packageType
-                                .toString(),
-                            onlyDate: widget.onlyDate,
-                            onlyMonth: widget.onlyMonth,
-                            purposeOfPooja: screenController
-                                    .poojaDetailModel!.data!.purposeOfPooja ??
-                                "",
-                            poojaName: screenController
-                                    .poojaDetailModel!.data!.title ??
-                                "",
-                            templeName: screenController
-                                    .poojaDetailModel!.data!.mandirName ??
-                                "",
-                            userId: widget.userId,
-                          ),
+                          builder: (context) => 
+                         ReviewAndCheckout(
+  bannerList: screenController.poojaDetailModel!.data!.bannerImages!,
+  packageId: screenController.poojaDetailModel!.data!.packages![selcetdpackage].sId.toString(), // 👈 add this line
+  date: "${widget.onlyDate} ${widget.onlyMonth}",
+  packageAmount: screenController.poojaDetailModel!.data!.packages![selcetdpackage].packagePrice.toString(),
+  packageName: screenController.poojaDetailModel!.data!.packages![selcetdpackage].packageType.toString(),
+  onlyDate: widget.onlyDate,
+  onlyMonth: widget.onlyMonth,
+  purposeOfPooja: screenController.poojaDetailModel!.data!.purposeOfPooja ?? "",
+  poojaName: screenController.poojaDetailModel!.data!.title ?? "",
+  templeName: screenController.poojaDetailModel!.data!.mandirName ?? "",
+  userId: widget.userId,
+),
                         ));
                   },
                   child: Container(
@@ -1331,28 +1334,18 @@ class _PoojaDetailScreenState extends State<PoojaDetailScreen> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => ReviewAndCheckout(
-                          bannerList: screenController
-                              .poojaDetailModel!.data!.bannerImages!,
-                          date: "${widget.onlyDate} ${widget.onlyMonth}",
-                          packageAmount: screenController.poojaDetailModel!
-                              .data!.packages![selcetdpackage].packagePrice
-                              .toString(),
-                          packageName: screenController.poojaDetailModel!.data!
-                              .packages![selcetdpackage].packageType
-                              .toString(),
-                          onlyDate: widget.onlyDate,
-                          onlyMonth: widget.onlyMonth,
-                          purposeOfPooja: screenController
-                                  .poojaDetailModel!.data!.purposeOfPooja ??
-                              "",
-                          poojaName:
-                              screenController.poojaDetailModel!.data!.title ??
-                                  "",
-                          templeName: screenController
-                                  .poojaDetailModel!.data!.mandirName ??
-                              "",
-                          userId: widget.userId,
-                        ),
+  bannerList: screenController.poojaDetailModel!.data!.bannerImages!,
+  packageId: screenController.poojaDetailModel!.data!.packages![selcetdpackage].sId.toString(), // 👈 must be in BOTH call sites
+  date: "${widget.onlyDate} ${widget.onlyMonth}",
+  packageAmount: screenController.poojaDetailModel!.data!.packages![selcetdpackage].packagePrice.toString(),
+  packageName: screenController.poojaDetailModel!.data!.packages![selcetdpackage].packageType.toString(),
+  onlyDate: widget.onlyDate,
+  onlyMonth: widget.onlyMonth,
+  purposeOfPooja: screenController.poojaDetailModel!.data!.purposeOfPooja ?? "",
+  poojaName: screenController.poojaDetailModel!.data!.title ?? "",
+  templeName: screenController.poojaDetailModel!.data!.mandirName ?? "",
+  userId: widget.userId,
+),
                       ));
                 },
                 child: Container(
@@ -2052,27 +2045,22 @@ class _PoojaDetailScreenState extends State<PoojaDetailScreen> {
                                         MaterialPageRoute(
                                             builder: (_) => MyWallet()));
                                   } else {
-                                    screenController.bookPoojaApi(
-                                        userId: widget.userId.toString(),
-                                        poojaId: screenController
-                                            .poojaDetailModel!.data!.sId
-                                            .toString(),
-                                        packageType: screenController
-                                            .poojaDetailModel!
-                                            .data!
-                                            .packages![index]
-                                            .packageType
-                                            .toString(),
-                                        packagePrice: screenController
-                                            .poojaDetailModel!
-                                            .data!
-                                            .packages![index]
-                                            .packagePrice
-                                            .toString(),
-                                        poojaDate: screenController
-                                            .poojaDetailModel!.data!.pujaDate
-                                            .toString(),
-                                        contextbook: context);
+                                   screenController.placeOrderApi(
+    pujaId: screenController.poojaDetailModel!.data!.sId.toString(),
+    packageId: screenController.poojaDetailModel!.data!.packages![index].sId.toString(),
+    addonsSelected: [],
+    homeAddonsSelected: [],
+    userDetails: {
+      "name": "",
+      "purposeOfPooja": screenController.poojaDetailModel!.data!.purposeOfPooja ?? "",
+      "gotra": "",
+      "place": "",
+      "email": "",
+      "whatsappNumber": "",
+      "courierAddress": "",
+    },
+    isHomeDeliveryRequired: false,
+    paymentMode: "wallet");
                                   }
                                 }
 

@@ -7,6 +7,7 @@ import 'package:carousel_indicator/carousel_indicator.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:astro_gurujii/Screens/poojaScreen/model/poojDetailsModel.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:fluttertoast/fluttertoast.dart';
@@ -37,27 +38,31 @@ import '../../transection_screen/TransactionHistory.dart';
 import '../controller/controller.dart';
 
 class ReviewAndCheckout extends StatefulWidget {
- final List<String> bannerList;
- final String poojaName;
- final String purposeOfPooja;
- final String templeName;
- final String date;
- final String onlyDate;
- final String onlyMonth;
- final String packageName;
- final String packageAmount;
- final String userId;
+  final List<String> bannerList;
+  final String packageId;          // 👈 add
+  final String poojaName;
+  final String purposeOfPooja;
+  final String templeName;
+  final String date;
+  final String onlyDate;
+  final String onlyMonth;
+  final String packageName;
+  final String packageAmount;
+  final String userId;
 
   const ReviewAndCheckout({
-     required this.bannerList,
+    required this.bannerList,
+    required this.packageId,       // 👈 add
     required this.poojaName,
-    required  this.purposeOfPooja,
-    required  this.templeName,
-    required  this.date,
-    required  this.packageName,
-    required  this.userId,
-    required this.onlyDate, required this.onlyMonth,
-    required   this.packageAmount});
+    required this.purposeOfPooja,
+    required this.templeName,
+    required this.date,
+    required this.packageName,
+    required this.userId,
+    required this.onlyDate,
+    required this.onlyMonth,
+    required this.packageAmount,
+  });
 
   @override
   State<ReviewAndCheckout> createState() => _ReviewAndCheckoutState();
@@ -65,6 +70,22 @@ class ReviewAndCheckout extends StatefulWidget {
 
 class _ReviewAndCheckoutState extends State<ReviewAndCheckout> {
 
+
+
+// Participant details — required before placing the order
+final _nameController = TextEditingController();
+final _gotraController = TextEditingController();
+final _placeController = TextEditingController();
+final _emailController = TextEditingController();
+final _whatsappController = TextEditingController();
+final _courierAddressController = TextEditingController();
+
+// Addon selection state: addonId -> qty
+final Map<String, int> _selectedAddons = {};
+final Map<String, int> _selectedHomeAddons = {};
+bool _wantsHomeDelivery = false;
+
+bool _isPlacingOrder = false;
   PoojaController screenController = Get.put(PoojaController());
 
   @override
@@ -76,7 +97,199 @@ class _ReviewAndCheckoutState extends State<ReviewAndCheckout> {
     screenController. razorpay!.on(Razorpay.EVENT_PAYMENT_SUCCESS, screenController.handlePaymentSuccess);
     screenController. razorpay!.on(Razorpay.EVENT_PAYMENT_ERROR, screenController.handlePaymentError);
     screenController. razorpay!.on(Razorpay.EVENT_EXTERNAL_WALLET, screenController.handleExternalWallet);
+ 
+  // _purposeController.text = widget.purposeOfPooja;
   }
+
+
+
+  Widget _buildAddonsSection() {
+  final addons = screenController.poojaDetailModel?.data?.addons ?? [];
+  if (addons.isEmpty) return SizedBox.shrink();
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(height: 15),
+      CustomText(text: "Add-ons", fontWeight: FontWeight.bold, fontSize: 16),
+      SizedBox(height: 8),
+      ...addons.map((addon) {
+        final id = addon.sId ?? '';
+        final selected = _selectedAddons.containsKey(id);
+        return CheckboxListTile(
+          value: selected,
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          activeColor: AppColors.orangeColor,
+          title: Text("${addon.pname}"),
+          subtitle: Text("₹${addon.pamount}"),
+          onChanged: (v) {
+            setState(() {
+              if (v == true) {
+                _selectedAddons[id] = 1;
+              } else {
+                _selectedAddons.remove(id);
+              }
+            });
+          },
+        );
+      }).toList(),
+    ],
+  );
+}
+
+Widget _buildHomeDeliveryAddonsSection() {
+  final homeAddons = screenController.poojaDetailModel?.data?.homeDeliveryAddons ?? [];
+  if (homeAddons.isEmpty) return SizedBox.shrink();
+
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(height: 15),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        activeColor: AppColors.orangeColor,
+        title: CustomText(text: "Home Delivery Add-ons", fontWeight: FontWeight.bold, fontSize: 16),
+        value: _wantsHomeDelivery,
+        onChanged: (v) => setState(() {
+          _wantsHomeDelivery = v;
+          if (!v) _selectedHomeAddons.clear();
+        }),
+      ),
+      if (_wantsHomeDelivery) ...[
+        ...homeAddons.map((addon) {
+          final id = addon.sId ?? '';
+          final selected = _selectedHomeAddons.containsKey(id);
+          return CheckboxListTile(
+            value: selected,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            activeColor: AppColors.orangeColor,
+            title: Text("${addon.pname}"),
+            subtitle: Text("₹${addon.pamount}"),
+            onChanged: (v) {
+              setState(() {
+                if (v == true) {
+                  _selectedHomeAddons[id] = 1;
+                } else {
+                  _selectedHomeAddons.remove(id);
+                }
+              });
+            },
+          );
+        }).toList(),
+        SizedBox(height: 8),
+        TextField(
+          controller: _courierAddressController,
+          maxLines: 2,
+          decoration: InputDecoration(
+            labelText: "Courier Address *",
+            border: OutlineInputBorder(),
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
+Widget _buildParticipantDetailsSection() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      SizedBox(height: 15),
+      CustomText(text: "Participant Details", fontWeight: FontWeight.bold, fontSize: 16),
+      SizedBox(height: 8),
+      TextField(
+        controller: _nameController,
+        decoration: InputDecoration(labelText: "Full Name *", border: OutlineInputBorder()),
+      ),
+      SizedBox(height: 10),
+      TextField(
+        controller: _whatsappController,
+        keyboardType: TextInputType.phone,
+        decoration: InputDecoration(labelText: "WhatsApp Number *", border: OutlineInputBorder()),
+      ),
+      SizedBox(height: 10),
+      TextField(
+        controller: _gotraController,
+        decoration: InputDecoration(labelText: "Gotra", border: OutlineInputBorder()),
+      ),
+      SizedBox(height: 10),
+      TextField(
+        controller: _placeController,
+        decoration: InputDecoration(labelText: "Place", border: OutlineInputBorder()),
+      ),
+      SizedBox(height: 10),
+      TextField(
+        controller: _emailController,
+        keyboardType: TextInputType.emailAddress,
+        decoration: InputDecoration(labelText: "Email", border: OutlineInputBorder()),
+      ),
+    ],
+  );
+}
+
+double _computeAddonsTotal() {
+  final addons = screenController.poojaDetailModel?.data?.addons ?? [];
+  double sum = 0;
+  _selectedAddons.forEach((id, qty) {
+    final match = addons.firstWhere((a) => a.sId == id, orElse: () => Addon(pamount: 0));
+    sum += (match.pamount ?? 0) * qty;
+  });
+  return sum;
+}
+
+double _computeHomeAddonsTotal() {
+  if (!_wantsHomeDelivery) return 0;
+  final homeAddons = screenController.poojaDetailModel?.data?.homeDeliveryAddons ?? [];
+  double sum = 0;
+  _selectedHomeAddons.forEach((id, qty) {
+    final match = homeAddons.firstWhere((a) => a.sId == id, orElse: () => Addon(pamount: 0));
+    sum += (match.pamount ?? 0) * qty;
+  });
+  return sum;
+}
+
+bool _validateParticipantDetails() {
+  if (_nameController.text.trim().isEmpty) {
+    Fluttertoast.showToast(msg: "Please enter your name");
+    return false;
+  }
+  if (_whatsappController.text.trim().isEmpty) {
+    Fluttertoast.showToast(msg: "Please enter your WhatsApp number");
+    return false;
+  }
+  if (_wantsHomeDelivery && _courierAddressController.text.trim().isEmpty) {
+    Fluttertoast.showToast(msg: "Please enter a courier address for home delivery");
+    return false;
+  }
+  return true;
+}
+
+Map<String, dynamic> _buildUserDetailsPayload() {
+  return {
+    "name": _nameController.text.trim(),
+    "purposeOfPooja": widget.purposeOfPooja,
+    "gotra": _gotraController.text.trim(),
+    "place": _placeController.text.trim(),
+    "email": _emailController.text.trim(),
+    "whatsappNumber": _whatsappController.text.trim(),
+    "courierAddress": _courierAddressController.text.trim(),
+  };
+}
+
+List<Map<String, dynamic>> _buildAddonsSelectedPayload() {
+  return _selectedAddons.entries
+      .map((e) => {"addon_id": e.key, "qty": e.value})
+      .toList();
+}
+
+List<Map<String, dynamic>> _buildHomeAddonsSelectedPayload() {
+  if (!_wantsHomeDelivery) return [];
+  return _selectedHomeAddons.entries
+      .map((e) => {"addon_id": e.key, "qty": e.value})
+      .toList();
+}
 
   @override
   Widget build(BuildContext context) {
@@ -163,7 +376,9 @@ class _ReviewAndCheckoutState extends State<ReviewAndCheckout> {
                             SizedBox(width: 10,),
 
 
-
+_buildAddonsSection(),
+    _buildHomeDeliveryAddonsSection(),
+    _buildParticipantDetailsSection(),
 
 
                             // Icon(Icons.error_outline,size: 18),
@@ -511,24 +726,28 @@ bool _isloading = false;
       else {
 
         try {
-          await screenController.bookPoojaApi(
-            payment_mode: "wallet",
-            userId: widget.userId.toString(),
-            poojaId: screenController.poojaDetailModel!.data!.sId.toString(),
-            packageType: widget.packageName,
-            packagePrice: total.toString(),
-            poojaDate: screenController.poojaDetailModel!.data!.pujaDate.toString(),
-            contextbook: context,
-          );
-          setState(() {
-            _isloading = false;
-          });
-          Future.delayed(Duration.zero, () {
-            Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => PoojaOrderList())
-            );
-          });
+         if (!_validateParticipantDetails()) return;
+
+setState(() => _isPlacingOrder = true);
+
+final success = await screenController.placeOrderApi(
+  pujaId: screenController.poojaDetailModel!.data!.sId.toString(),
+  packageId: widget.packageId,
+  addonsSelected: _buildAddonsSelectedPayload(),
+  homeAddonsSelected: _buildHomeAddonsSelectedPayload(),
+  userDetails: _buildUserDetailsPayload(),
+  isHomeDeliveryRequired: _wantsHomeDelivery,
+  paymentMode: "wallet",
+);
+
+setState(() => _isPlacingOrder = false);
+
+if (success) {
+  Navigator.pop(context); // close the payment sheet
+  Future.delayed(Duration.zero, () {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => PoojaOrderList()));
+  });
+}
 
           // Navigator.push(
           //   context,
@@ -578,19 +797,21 @@ bool _isloading = false;
     else if (selectedPaymentOptions == 1){
       try{
 
-        await  screenController.bookPoojaApi(
-            payment_mode: "razorpay",
-            userId: widget.userId.toString(),
-            poojaId: screenController
-                .poojaDetailModel!.data!.sId
-                .toString(),
-            packageType: widget.packageName,
-            packagePrice: total.toString(),
-            poojaDate: screenController
-                .poojaDetailModel!.data!.pujaDate
-                .toString(),
+        if (!_validateParticipantDetails()) return;
 
-            contextbook: context);
+setState(() => _isPlacingOrder = true);
+
+await screenController.placeOrderApi(
+  pujaId: screenController.poojaDetailModel!.data!.sId.toString(),
+  packageId: widget.packageId,
+  addonsSelected: _buildAddonsSelectedPayload(),
+  homeAddonsSelected: _buildHomeAddonsSelectedPayload(),
+  userDetails: _buildUserDetailsPayload(),
+  isHomeDeliveryRequired: _wantsHomeDelivery,
+  paymentMode: "razorpay",
+);
+
+setState(() => _isPlacingOrder = false);
 
         // Future.delayed(Duration.zero, () {
         //   Navigator.push(
@@ -674,22 +895,29 @@ bool _isloading = false;
                     else {
 
                       try {
-                        await screenController.bookPoojaApi(
-                          payment_mode: "wallet",
-                          userId: widget.userId.toString(),
-                          poojaId: screenController.poojaDetailModel!.data!.sId.toString(),
-                          packageType: widget.packageName,
-                          packagePrice: total.toString(),
-                          poojaDate: screenController.poojaDetailModel!.data!.pujaDate.toString(),
-                          contextbook: context,
-                        );
+                       if (!_validateParticipantDetails()) return;
 
-                        Future.delayed(Duration.zero, () {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => PoojaOrderList())
-                          );
-                        });
+setState(() => _isPlacingOrder = true);
+
+final success = await screenController.placeOrderApi(
+  pujaId: screenController.poojaDetailModel!.data!.sId.toString(),
+  packageId: widget.packageId,
+  addonsSelected: _buildAddonsSelectedPayload(),
+  homeAddonsSelected: _buildHomeAddonsSelectedPayload(),
+  userDetails: _buildUserDetailsPayload(),
+  isHomeDeliveryRequired: _wantsHomeDelivery,
+  paymentMode: "wallet",
+);
+
+setState(() => _isPlacingOrder = false);
+
+if (success) {
+  Navigator.pop(context); // close the payment sheet
+  Future.delayed(Duration.zero, () {
+    Navigator.push(context, MaterialPageRoute(builder: (context) => PoojaOrderList()));
+  });
+}
+                      
 
                         // Navigator.push(
                         //   context,
@@ -743,19 +971,21 @@ bool _isloading = false;
 
                   try{
 
-                    await  screenController.bookPoojaApi(
-                        payment_mode: "razorpay",
-                        userId: widget.userId.toString(),
-                        poojaId: screenController
-                            .poojaDetailModel!.data!.sId
-                            .toString(),
-                        packageType: widget.packageName,
-                        packagePrice: total.toString(),
-                        poojaDate: screenController
-                            .poojaDetailModel!.data!.pujaDate
-                            .toString(),
+                    if (!_validateParticipantDetails()) return;
 
-                        contextbook: context);
+setState(() => _isPlacingOrder = true);
+
+await screenController.placeOrderApi(
+  pujaId: screenController.poojaDetailModel!.data!.sId.toString(),
+  packageId: widget.packageId,
+  addonsSelected: _buildAddonsSelectedPayload(),
+  homeAddonsSelected: _buildHomeAddonsSelectedPayload(),
+  userDetails: _buildUserDetailsPayload(),
+  isHomeDeliveryRequired: _wantsHomeDelivery,
+  paymentMode: "razorpay",
+);
+
+setState(() => _isPlacingOrder = false);
 
                     // Future.delayed(Duration.zero, () {
                     //   Navigator.push(

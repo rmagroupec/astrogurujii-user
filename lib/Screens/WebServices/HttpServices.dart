@@ -201,64 +201,158 @@ class HttpServices {
     }
   }
 
-  Future<PoojaDetailModel?> poojaDetailsApi(String instaId) async {
-    Map reqBody = {"instaId": instaId.toString()};
-    String url = "https://admin.vaidikguru.com/puja/pujabyinstaid";
+ Future<PoojaDetailModel?> poojaDetailsApi(String instaId) async {
+  // `puja/pujabyinstaid` does `pujaSchema.findById({ _id: instaId })` on the
+  // backend, which is an invalid query (findById expects the raw id, not an
+  // object) — it fails on every single call, no matter what id is passed.
+  // Since we can't touch the backend, we call `puja/puja_details_json/:id`
+  // instead (same server, does the lookup correctly) and translate its
+  // response into the exact same JSON shape PoojaDetailModel already
+  // expects. This keeps the controller and every screen untouched.
+  String url = "https://admin.vaidikguru.com/puja/puja_details_json/$instaId";
 
-    //  final response=await _apiHelper.post('user_api/login', reqBody);
-    final response = await _apiHelper.postN(reqBody, url);
-    try {
-      log("Response is ====>>>  $response");
+  try {
+    final response = await _apiHelper.getGoogleMap(url);
+    log("Response is (puja_details_json) ====>>>  $response");
 
-      return PoojaDetailModel.fromJson(response);
-    } catch (e) {
+    if (response == null) {
       return null;
     }
-  }
 
-  Future<PoojaBookResponseModel?> bookPooja(
-      {String? packagePrice,
-      String? packageType,
-      String? poojaId,
-      String? poojaDate,
-      String? userId,
-      String? payment_mode,
-      BuildContext? context}) async {
-    Map reqBody = {
-      "puja_id": poojaId.toString(),
-      "puja_date": poojaDate.toString(),
-      "puja_amount": packagePrice.toString(),
-      "puja_type": packageType.toString(),
-      "user_id": userId.toString(),
-      "payment_mode":payment_mode.toString()
-      //"user_id":"657ad5aca6d5df2db90465ad"
+    final bool ok = response['status'] == true && response['data'] != null;
+    final Map rawData = ok ? Map.from(response['data']) : {};
+
+    final Map<String, dynamic> normalized = {
+      "status": ok,
+      "message": response['message'],
+      // This endpoint doesn't return a participant count; default to 0
+      // instead of leaving it null so the UI never shows "null+".
+      "participents": response['participents'] ?? 0,
+      "data": ok
+          ? {
+              "_id": rawData['_id'],
+              "title": rawData['title'],
+              "pujaImage": rawData['pujaImage'],
+              "templeImage": rawData['templeImage'],
+              "bannerImages":
+                  rawData['bannerImages'] is List ? rawData['bannerImages'] : <String>[],
+              "pujaDate": rawData['pujaDateInput'] ?? rawData['pujaDate'],
+              "pujaDatetime": rawData['pujaDateText'] ?? rawData['pujaDatetime'],
+              "mandirName": rawData['mandirName'],
+              "aboutPuja": rawData['aboutPuja'],
+              "purposeOfPooja": rawData['purposeOfPooja'],
+              "aboutTempalTitle":
+                  rawData['templeLocation'] ?? rawData['aboutTempalTitle'],
+              "aboutTempalDescription":
+                  rawData['aboutTemple'] ?? rawData['aboutTempalDescription'],
+              "is_delete": rawData['is_delete'] ?? "0",
+              "colorStatus": rawData['colorStatus'] ?? "0",
+              "createdAt": rawData['createdAt'],
+              "updatedAt": rawData['updatedAt'],
+              "__v": rawData['__v'],
+              "benifits": _pujaBenifitsJson(rawData['benefits']),
+              "faq": rawData['faq'] is List ? rawData['faq'] : [],
+              "packages": _pujaPackagesJson(rawData['packages']),
+              "reviews": _pujaReviewsJson(rawData['reviews']),
+            }
+          : null,
     };
 
-    String url = "https://admin.vaidikguru.com/puja/bookpuja";
-
-    //  final response=await _apiHelper.post('user_api/login', reqBody);
-    final response = await _apiHelper.postN(reqBody, url);
-
-     // try {
-      return PoojaBookResponseModel.fromJson(response);
-    // } catch (e) {
-    //   return null;
-    // }
-
-    // Fluttertoast.showToast(
-    //     msg: response["message"],
-    //     toastLength: Toast.LENGTH_SHORT,
-    //     gravity: ToastGravity.CENTER,
-    //     timeInSecForIosWeb: 1,
-    //     backgroundColor: Colors.red,
-    //     textColor: Colors.white,
-    //     fontSize: 16.0);
-    //
-    // if (response["status"] == true) {
-    //   Navigator.pop(context!);
-    // } else {}
+    return PoojaDetailModel.fromJson(normalized);
+  } catch (e) {
+    log("poojaDetailsApi error ====>>> $e");
+    return null;
   }
+}
 
+
+Future<dynamic> pujaAddToCart({
+  required String pujaId,
+  required String packageId,
+  required List<Map<String, dynamic>> addonsSelected,
+  required List<Map<String, dynamic>> homeAddonsSelected,
+  required Map<String, dynamic> userDetails,
+  bool isHomeDeliveryRequired = false,
+  Map<String, dynamic>? deliveryAddress,
+  String? couponCode,
+}) async {
+  final _prefs = await SharedPreferences.getInstance();
+  Map reqBody = {
+    "puja_id": pujaId,
+    "package_id": packageId,
+    "addons_selected": addonsSelected,
+    "home_addons_selected": homeAddonsSelected,
+    "userDetails": userDetails,
+    "is_home_delivery_required": isHomeDeliveryRequired,
+    "deliveryAddress": deliveryAddress ?? {},
+    if (couponCode != null && couponCode.isNotEmpty) "coupon_code": couponCode,
+  };
+
+  final response = await _apiHelper.postBearer(
+      'puja/pujaaddToCart', reqBody, "${_prefs.get('token')}");
+  log("pujaAddToCart response ====>>> $response");
+  return response;
+}
+// -- shaping helpers for poojaDetailsApi only --
+
+List _pujaBenifitsJson(dynamic raw) {
+  if (raw is! List) return [];
+  return raw.map((e) {
+    if (e is Map) {
+      return {"title": e['title'] ?? '', "description": e['description'] ?? ''};
+    }
+    return {"title": e?.toString() ?? '', "description": ''};
+  }).toList();
+}
+
+List _pujaPackagesJson(dynamic raw) {
+  if (raw is! List) return [];
+  return raw.map((e) {
+    final Map p = e is Map ? e : {};
+    return {
+      "_id": p['_id'],
+      "packageName": p['packageName'] ?? '',
+      "packageType": p['packageType'] ?? 'Individual',
+      // model field is String?, backend may send a num
+      "packagePrice": (p['packagePrice'] ?? 0).toString(),
+      "packageDescription":
+          p['packageDescription'] is List ? p['packageDescription'] : <String>[],
+    };
+  }).toList();
+}
+
+List _pujaReviewsJson(dynamic raw) {
+  if (raw is! List) return [];
+  return raw.map((e) {
+    final Map r = e is Map ? e : {};
+    return {
+      "_id": r['_id'],
+      "name": r['name'] ?? 'User',
+      "photo": r['photo'] ?? '',
+      "review": r['review'] ?? '',
+    };
+  }).toList();
+}
+
+ Future<PoojaBookResponseModel?> bookPooja({
+  required String paymentMode, // "wallet" | "razorpay"
+}) async {
+  final _prefs = await SharedPreferences.getInstance();
+  Map reqBody = {
+    "payment_mode": paymentMode,
+  };
+
+  final response = await _apiHelper.postBearer(
+      'puja/bookpuja', reqBody, "${_prefs.get('token')}");
+
+  log("bookPooja response ====>>> $response");
+
+  try {
+    return PoojaBookResponseModel.fromJson(response);
+  } catch (e) {
+    return null;
+  }
+}
   Future<UserLoginModel?> user_login(
       {required String number, required String otp}) async {
     _init();

@@ -45,6 +45,8 @@ class Data {
   String? title;
   List<Packages>? packages;
   List<Reviews>? reviews;
+  List<Addon>? addons;
+List<Addon>? homeDeliveryAddons;
 
   String? pujaDatetime;
   String? createdAt;
@@ -95,60 +97,113 @@ class Data {
     return <Map<String, dynamic>>[];
   }
 
-  Data.fromJson(Map<String, dynamic> json) {
-    pujaImage = json['pujaImage']?.toString();
-    bannerImages = _asStringList(json['bannerImages']);          // was .cast<String>() — crashed on null
-    pujaDate = json['pujaDate']?.toString();
-    mandirName = json['mandirName']?.toString();
-    aboutPuja = json['aboutPuja']?.toString();
-    purposeOfPooja = json['purposeOfPooja']?.toString();
-    aboutTempalTitle = json['aboutTempalTitle']?.toString();
-    templeImage = json['templeImage']?.toString();
-    aboutTempalDescription = json['aboutTempalDescription']?.toString();
+Data.fromJson(Map<String, dynamic> json) {
+  pujaImage = json['pujaImage'];
+  bannerImages = json['bannerImages'] != null
+      ? List<String>.from(json['bannerImages'])
+      : <String>[];
+  pujaDate = json['pujaDate'];
+  mandirName = json['mandirName'];
+  aboutPuja = json['aboutPuja'];
+  purposeOfPooja = json['purposeOfPooja'];
+  aboutTempalTitle = json['aboutTempalTitle'];
+  templeImage = json['templeImage'];
+  aboutTempalDescription = json['aboutTempalDescription'];
 
-    benifits = _asMapList(json['benifits']).map((v) => Benifits.fromJson(v)).toList();
-    faq = _asMapList(json['faq']).map((v) => Faq.fromJson(v)).toList();
-    reviews = _asMapList(json['reviews']).map((v) => Reviews.fromJson(v)).toList();
-    packages = _asMapList(json['packages']).map((v) => Packages.fromJson(v)).toList();
+  benifits = json['benifits'] != null
+      ? (json['benifits'] as List).map((v) => Benifits.fromJson(v)).toList()
+      : <Benifits>[];
 
-    isDelete = json['is_delete']?.toString();
-    colorStatus = json['colorStatus']?.toString();
-    sId = json['_id']?.toString();
-    title = json['title']?.toString();
+  faq = json['faq'] != null
+      ? (json['faq'] as List).map((v) => Faq.fromJson(v)).toList()
+      : <Faq>[];
 
-    pujaDatetime = json['pujaDatetime']?.toString();
-    createdAt = json['createdAt']?.toString();
-    updatedAt = json['updatedAt']?.toString();
-    iV = json['__v'] is int ? json['__v'] as int : int.tryParse(json['__v']?.toString() ?? '');
+  reviews = json['reviews'] != null
+      ? (json['reviews'] as List).map((v) => Reviews.fromJson(v)).toList()
+      : <Reviews>[];
+
+  addons = json['addons'] != null
+    ? (json['addons'] as List).map((v) => Addon.fromJson(v)).toList()
+    : <Addon>[];
+
+homeDeliveryAddons = json['homeDeliveryAddons'] != null
+    ? (json['homeDeliveryAddons'] as List).map((v) => Addon.fromJson(v)).toList()
+    : <Addon>[];
+
+  isDelete = json['is_delete'];
+  colorStatus = json['colorStatus'];
+  sId = json['_id'];
+  title = json['title'];
+
+  packages = json['packages'] != null
+      ? (json['packages'] as List).map((v) => Packages.fromJson(v)).toList()
+      : <Packages>[];
+
+  pujaDatetime = json['pujaDatetime'];
+  createdAt = json['createdAt'];
+  updatedAt = json['updatedAt'];
+  iV = json['__v'];
+}
+
+  Map<String, dynamic> toJson() {
+  final Map<String, dynamic> data = new Map<String, dynamic>();
+  data['pujaImage'] = this.pujaImage;
+  data['bannerImages'] = this.bannerImages;
+  data['pujaDate'] = this.pujaDate;
+  data['mandirName'] = this.mandirName;
+  data['aboutPuja'] = this.aboutPuja;
+  data['purposeOfPooja'] = this.purposeOfPooja;
+  data['aboutTempalTitle'] = this.aboutTempalTitle;
+  data['templeImage'] = this.templeImage;
+  data['aboutTempalDescription'] = this.aboutTempalDescription;
+  data['benifits'] = (this.benifits ?? []).map((v) => v.toJson()).toList();
+  data['faq'] = (this.faq ?? []).map((v) => v.toJson()).toList();
+  data['is_delete'] = this.isDelete;
+  data['colorStatus'] = this.colorStatus;
+  data['_id'] = this.sId;
+  data['title'] = this.title;
+  data['packages'] = (this.packages ?? []).map((v) => v.toJson()).toList();
+  data['reviews'] = (this.reviews ?? []).map((v) => v.toJson()).toList();
+  data['addons'] = (this.addons ?? []).map((v) => v.toJson()).toList();               // 👈 add
+  data['homeDeliveryAddons'] =
+      (this.homeDeliveryAddons ?? []).map((v) => v.toJson()).toList();                // 👈 add
+  data['pujaDatetime'] = this.pujaDatetime;
+  data['createdAt'] = this.createdAt;
+  data['updatedAt'] = this.updatedAt;
+  data['__v'] = this.iV;
+  return data;
+}
+
+  
+}
+
+class Addon {
+  String? sId;
+  String? pname;
+  String? pdesc;
+  String? pimage;
+  num? pamount;
+
+  Addon({this.sId, this.pname, this.pdesc, this.pimage, this.pamount});
+
+  Addon.fromJson(Map<String, dynamic> json) {
+    sId = json['_id'];
+    pname = json['pname'];
+    pdesc = json['pdesc'];
+    pimage = json['pimage'];
+    pamount = json['pamount'];
   }
 
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> data = new Map<String, dynamic>();
-    data['pujaImage'] = this.pujaImage;
-    data['bannerImages'] = this.bannerImages;
-    data['pujaDate'] = this.pujaDate;
-    data['mandirName'] = this.mandirName;
-    data['aboutPuja'] = this.aboutPuja;
-    data['purposeOfPooja'] = this.purposeOfPooja;
-    data['aboutTempalTitle'] = this.aboutTempalTitle;
-    data['templeImage'] = this.templeImage;
-    data['aboutTempalDescription'] = this.aboutTempalDescription;
-    data['benifits'] = (this.benifits ?? []).map((v) => v.toJson()).toList();
-    data['faq'] = (this.faq ?? []).map((v) => v.toJson()).toList();
-    data['is_delete'] = this.isDelete;
-    data['colorStatus'] = this.colorStatus;
-    data['_id'] = this.sId;
-    data['title'] = this.title;
-    data['packages'] = (this.packages ?? []).map((v) => v.toJson()).toList();
-    data['reviews'] = (this.reviews ?? []).map((v) => v.toJson()).toList();
-    data['pujaDatetime'] = this.pujaDatetime;
-    data['createdAt'] = this.createdAt;
-    data['updatedAt'] = this.updatedAt;
-    data['__v'] = this.iV;
+    final data = <String, dynamic>{};
+    data['_id'] = sId;
+    data['pname'] = pname;
+    data['pdesc'] = pdesc;
+    data['pimage'] = pimage;
+    data['pamount'] = pamount;
     return data;
   }
 }
-
 class Benifits {
   String? title;
   String? description;
@@ -201,13 +256,15 @@ class Packages {
         this.packageName,
         this.packagePrice});
 
-  Packages.fromJson(Map<String, dynamic> json) {
-    packageType = json['packageType']?.toString();
-    packageDescription = Data._asStringList(json['packageDescription']); // was .cast<String>() — crashed on null
-    sId = json['_id']?.toString();
-    packageName = json['packageName']?.toString();
-    packagePrice = json['packagePrice']?.toString();
-  }
+Packages.fromJson(Map<String, dynamic> json) {
+  packageType = json['packageType'];
+  packageDescription = json['packageDescription'] != null
+      ? List<String>.from(json['packageDescription'])
+      : <String>[];
+  sId = json['_id'];
+  packageName = json['packageName'];
+  packagePrice = json['packagePrice']?.toString();
+}
 
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = new Map<String, dynamic>();

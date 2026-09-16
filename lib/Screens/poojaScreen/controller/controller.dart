@@ -107,20 +107,10 @@ class PoojaController extends GetxController {
 
   }
 
-  void poojaDetailsApi(String instaId) async {
+ void poojaDetailsApi(String instaId) async {
   poojaDetailsLoading.value = true;
-  update();
-
-  try {
-    poojaDetailModel = await _httpServices.poojaDetailsApi(instaId);
-  } catch (e) {
-    poojaDetailModel = null;
-  }
-
-  if (poojaDetailModel == null || poojaDetailModel!.data == null) {
-    Fluttertoast.showToast(msg: poojaDetailModel?.message ?? 'Could not load puja details');
-  }
-
+  poojaDetailModel = await _httpServices.poojaDetailsApi(instaId);
+  print(poojaDetailModel?.data?.packages);   // ✅ safe navigation, never throws
   poojaDetailsLoading.value = false;
   update();
 }
@@ -158,87 +148,71 @@ class PoojaController extends GetxController {
 
 
 
- Future<void>  bookPoojaApi(
-      {String? packagePrice,
-      String? packageType,
-      String? poojaId,
-      String? poojaDate,
-      String? userId,
-      String? payment_mode,
-      BuildContext? contextbook}) async {
+ Future<bool> placeOrderApi({
+  required String pujaId,
+  required String packageId,
+  required List<Map<String, dynamic>> addonsSelected,
+  required List<Map<String, dynamic>> homeAddonsSelected,
+  required Map<String, dynamic> userDetails,
+  required bool isHomeDeliveryRequired,
+  required String paymentMode, // "wallet" | "razorpay"
+}) async {
+  // Step 1: add-to-cart (package + addons + participant details)
+  final cartResponse = await _httpServices.pujaAddToCart(
+    pujaId: pujaId,
+    packageId: packageId,
+    addonsSelected: addonsSelected,
+    homeAddonsSelected: homeAddonsSelected,
+    userDetails: userDetails,
+    isHomeDeliveryRequired: isHomeDeliveryRequired,
+  );
 
-    // contextSetFun(contextbook!);
-    double roundedPackagePrice = double.parse(packagePrice.toString());
-
-    var response = await _httpServices.bookPooja(
-        packagePrice: roundedPackagePrice.ceil().toString(),
-        packageType: packageType,
-        poojaId: poojaId,
-        poojaDate: poojaDate,
-        userId: userId,
-        payment_mode: payment_mode.toString(),
-        context: contextbook);
-
-
-
-    if (response?.status == true) {
-
-      if(payment_mode=="wallet"){
-
-
-
-
-         log("pooja book from wallet");
-
-         // showAnimatedAlertDialog(context!,response!.message.toString());
-
-        Fluttertoast.showToast(
-            msg: response!.message.toString(),
-            toastLength: Toast.LENGTH_SHORT,
-            gravity: ToastGravity.CENTER,
-            timeInSecForIosWeb: 1,
-            backgroundColor: Colors.red,
-            textColor: Colors.white,
-            fontSize: 16.0);
-
-      }else if(payment_mode=="razorpay"){
-
-
-
-        log("pooja book from Razorpay");
-
-        poojaBookResponseModel=response!;
-        openCheckout( poojaBookResponseModel!.orderId.toString());
-
-
-
-        update();
-
-        // Fluttertoast.showToast(
-        //     msg: response.message.toString(),
-        //     toastLength: Toast.LENGTH_SHORT,
-        //     gravity: ToastGravity.CENTER,
-        //     timeInSecForIosWeb: 1,
-        //     backgroundColor: Colors.red,
-        //     textColor: Colors.white,
-        //     fontSize: 16.0);
-      }
-
-    } else {
-      Fluttertoast.showToast(
-          msg: response!.message.toString(),
-          toastLength: Toast.LENGTH_SHORT,
-          gravity: ToastGravity.CENTER,
-          timeInSecForIosWeb: 1,
-          backgroundColor: Colors.red,
-          textColor: Colors.white,
-          fontSize: 16.0);
-
-    }
-
-
-    update();
+  if (cartResponse == null || cartResponse['status'] != true) {
+    Fluttertoast.showToast(
+      msg: cartResponse?['message']?.toString() ?? "Could not add puja to cart",
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.CENTER,
+      backgroundColor: Colors.red,
+      textColor: Colors.white,
+    );
+    return false;
   }
+
+  // Step 2: place the order from that cart
+  final response = await _httpServices.bookPooja(paymentMode: paymentMode);
+
+  if (response?.status == true) {
+    if (paymentMode == "wallet") {
+      log("pooja book from wallet");
+      Fluttertoast.showToast(
+        msg: response!.message.toString(),
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.CENTER,
+        timeInSecForIosWeb: 1,
+        backgroundColor: Colors.red,
+        textColor: Colors.white,
+        fontSize: 16.0,
+      );
+      return true;
+    } else if (paymentMode == "razorpay") {
+      log("pooja book from Razorpay");
+      poojaBookResponseModel = response!;
+      if (response.orderId != null && response.orderId!.isNotEmpty) {
+        openCheckout(response.orderId!);
+      }
+      return true;
+    }
+  } else {
+    Fluttertoast.showToast(
+      msg: response?.message?.toString() ?? "Could not place the order",
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.CENTER,
+      backgroundColor: Colors.red,
+      textColor: Colors.white,
+    );
+  }
+  return false;
+}
 
 
   int  bannerIndex=0;

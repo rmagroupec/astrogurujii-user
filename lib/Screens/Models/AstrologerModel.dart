@@ -45,6 +45,11 @@ class AstroResults {
   String? isChat;
   String? isChatOnline;
   String? isVoiceOnline;
+  bool isBoostChat = false;
+  bool isBoostCall = false;
+  bool isBoostVideo = false;
+  bool isEmergencyChat = false;
+  bool isEmergencyCall = false;
   var watting_time;
   String? isVideoOnline;
   var country;
@@ -106,7 +111,7 @@ class AstroResults {
     per_min_video_call_offer = _handleNaN(json['per_min_video_call_offer']);
     rating = json['rating'];
     name = json['name'];
-    is_busy = json['is_busy'];
+    is_busy = json['is_busy'] is bool ? (json['is_busy'] ? 1 : 0) : (json['is_busy'] ?? 0);
     about = json['about'];
     experience = _handleNaN(json['experience']);
     perMinChat = _handleNaN(json['per_min_chat']);
@@ -115,6 +120,11 @@ class AstroResults {
     isChat = json['is_chat'];
     perQuestionPrice = _handleNaN(json['per_question_price']);
     isChatOnline = json['is_chat_online'];
+        isBoostChat      = json['is_boost_chat'] ?? false;
+    isBoostCall      = json['is_boost_call'] ?? false;
+    isBoostVideo     = json['is_boost_video'] ?? false;
+    isEmergencyChat  = json['is_emergency_chat'] ?? false;
+    isEmergencyCall  = json['is_emergency_call'] ?? false;
     isVoiceOnline = json['is_voice_online'];
     isVideoOnline = json['is_video_online'];
     profileImg = json['profile_img'];
@@ -150,6 +160,11 @@ class AstroResults {
     data['rating'] = this.rating;
     data['name'] = this.name;
     data['is_busy'] = this.is_busy;
+      data['is_boost_chat']  = this.isBoostChat    ;
+   data['is_boost_call'] = this.isBoostCall    ;  
+    data['is_boost_video']= this.isBoostVideo ;    
+    data['is_emergency_chat'] =this.isEmergencyChat ; 
+    data['is_emergency_call']  = this.isEmergencyCall;  
     data['about'] = this.about;
     data['experience'] = _handleNaN(experience);
     data['per_min_chat'] = _handleNaN(perMinChat);

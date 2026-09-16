@@ -3,6 +3,7 @@ import 'package:astro_gurujii/Screens/AskAQuestion.dart';
 import 'package:astro_gurujii/Screens/AstroDetails/AstroDetails.dart';
 import 'package:astro_gurujii/Screens/AudiontakeForm.dart';
 import 'package:astro_gurujii/Screens/ChatIntakeForm.dart';
+import 'package:astro_gurujii/widget/astro_badges.dart';
 import 'package:astro_gurujii/Screens/Login.dart';
 import 'package:astro_gurujii/Screens/Models/AstrologerModel.dart';
 import 'package:astro_gurujii/Screens/Models/CategoryModel.dart';
@@ -319,6 +320,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
 
   @override
   Widget build(BuildContext context) {
+    
     return WillPopScope(
        onWillPop: () async {
         
@@ -1116,6 +1118,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                 scrollDirection: Axis.horizontal,
                                 itemCount: categoryResult.length,
                                 itemBuilder: (context, index) {
+                                  print('DEBUG_BOOST astro=${astroList[index].name} boostChat=${astroList[index].isBoostChat} boostCall=${astroList[index].isBoostCall} boostVideo=${astroList[index].isBoostVideo} emergChat=${astroList[index].isEmergencyChat} emergCall=${astroList[index].isEmergencyCall}');
                                   return GestureDetector(
                                     onTap: ()
                                     {
@@ -1684,9 +1687,9 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                       if (astroList[index]
                                                                           .is_busy ==
                                                                           0 &&
-                                                                          astroList[index]
+                                                                          (astroList[index]
                                                                               .isChatOnline ==
-                                                                              "on") {
+                                                                              "on" || astroList[index].isEmergencyChat)) {
                                                                         var callRate = (astroList[index].per_min_chat_offer.isEmpty)
                                                                             ? astroList[
                                                                         index]
@@ -1750,7 +1753,11 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                                 .toString());
                                                                       }
                                                                     },
-                                                                    child: Container(
+                                                                                                                                        child: BoostWrap(
+                                                                      show: astroList[index].isBoostChat,
+                                                                      child: EmergencyWrap(
+                                                                      show: astroList[index].isEmergencyChat,
+                                                                      child: Container(
                                                                       height: MediaQuery.of(context).size.height*0.045,
                                                                       decoration: BoxDecoration(
                                                                         // color: Colors.pink,
@@ -1762,7 +1769,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                         //     index]
                                                                         //         .is_busy),
                                                                           border:Border.all(width: 2,color:
-    
+
                                                                           setBorderColorChat(
                                                                               astroList[
                                                                               index]
@@ -1770,13 +1777,13 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                               astroList[
                                                                               index]
                                                                                   .is_busy)
-    
+
                                                                           ) ,
                                                                           borderRadius:
                                                                           BorderRadius
                                                                               .circular(
                                                                               20)
-    
+
                                                                       ),
                                                                       child: Padding(
                                                                         padding: const EdgeInsets.only(left: 20,right: 20),
@@ -1810,6 +1817,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                           ],
                                                                         ),
                                                                       ),
+                                                                    )),
                                                                     ),
                                                                   )
                                                                       : widget.talkKey == "on"
@@ -1819,9 +1827,9 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                       if (astroList[index]
                                                                           .is_busy ==
                                                                           0 &&
-                                                                          astroList[index]
+                                                                          (astroList[index]
                                                                               .isVoiceOnline ==
-                                                                              "on") {
+                                                                              "on" || astroList[index].isEmergencyCall)) {
                                                                         var callRate = (astroList[index].per_min_voice_call_offer.isEmpty)
                                                                             ? astroList[index]
                                                                             .perMinVoiceCall
@@ -1922,12 +1930,16 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                       .toString());
                                                                 }*/
                                                                     },
-                                                                    child:
-                                                                    Container(
+                                                                                                                                        child:
+                                                                    BoostWrap(
+                                                                      show: astroList[index].isBoostCall,
+                                                                      child: EmergencyWrap(
+                                                                      show: astroList[index].isEmergencyCall,
+                                                                      child: Container(
                                                                       height: MediaQuery.of(context).size.height*0.045,
                                                                       decoration: BoxDecoration(
                                                                                border:Border.all(width: 2,color:
-    
+
                                                                         setBorderColorChat(
                                                                             astroList[
                                                                             index]
@@ -1935,7 +1947,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                             astroList[
                                                                             index]
                                                                                 .is_busy)
-    
+
                                                                         ) ,
                                                                         borderRadius:
                                                                         BorderRadius
@@ -1983,6 +1995,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                           ],
                                                                         ),
                                                                       ),
+                                                                    )),
                                                                     ),
                                                                     /* Container(
                                                                 height: 35,
@@ -2147,7 +2160,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                       ? InkWell(
                                                                     onTap:
                                                                         () {
-                                                                      if (astroList[index].is_busy == 0 && astroList[index].isVideoOnline == "on") {
+                                                                      if (astroList[index].is_busy == 0 && (astroList[index].isVideoOnline == "on" || astroList[index].isEmergencyCall)) {
                                                                         //print("==============================================="+wallet.toString());
                                                                         bottomSheet(us_name!, us_image!,
                                                                             astroList[index].astro_number.toString(), context, astroList[index].id.toString(), (astroList[index].per_min_video_call_offer.isEmpty) ? astroList[index].perMinVideoCall.toString() : astroList[index].per_min_video_call_offer.toString(), "5", astroList[index].profileImg!, currency, "+91", astroList[index].name!, wallet.toString(), "video", loading);
@@ -2156,7 +2169,11 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                       }
                                                                     },
                                                                     child:
-                                                                    Container(
+                                                                    BoostWrap(
+                                                                      show: astroList[index].isBoostVideo,
+                                                                      child: EmergencyWrap(
+                                                                      show: astroList[index].isEmergencyCall,
+                                                                      child: Container(
                                                                       height: 35,
                                                                       alignment: Alignment.center,
                                                                       decoration: BoxDecoration(color: setBorderColorChat(astroList[index].isVideoOnline!, astroList[index].is_busy), borderRadius: BorderRadius.circular(10)),
@@ -2173,6 +2190,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                         ],
                                                                       ),
                                                                     ),
+                                                                      ))
                                                                   )
                                                                       : SizedBox(),
                                                                   (astroList[index].is_busy ==
@@ -2583,9 +2601,9 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                         if (_searchResult[index]
                                                                             .is_busy ==
                                                                             0 &&
-                                                                            _searchResult[index]
+                                                                            (_searchResult[index]
                                                                                 .isChatOnline ==
-                                                                                "on") {
+                                                                                "on" || _searchResult[index].isEmergencyChat)) {
                                                                           var callRate = (_searchResult[index].per_min_chat_offer.isEmpty)
                                                                               ? _searchResult[
                                                                           index]
@@ -2649,8 +2667,12 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                                   .toString());
                                                                         }
                                                                       },
-                                                                      child:
-                                                                      Container(
+                                                                                                                                            child:
+                                                                      BoostWrap(
+                                                                        show: _searchResult[index].isBoostChat,
+                                                                        child: EmergencyWrap(
+                                                                        show: _searchResult[index].isEmergencyChat,
+                                                                        child: Container(
                                                                         height: MediaQuery.of(context).size.height*0.045,
                                                                         decoration: BoxDecoration(
                                                                           // color: Colors.pink,
@@ -2662,7 +2684,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                           //     index]
                                                                           //         .is_busy),
                                                                             border:Border.all(width: 2,color:
-    
+
                                                                             setBorderColorChat(
                                                                                 _searchResult[
                                                                                 index]
@@ -2670,13 +2692,13 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                                 _searchResult[
                                                                                 index]
                                                                                     .is_busy)
-    
+
                                                                             ) ,
                                                                             borderRadius:
                                                                             BorderRadius
                                                                                 .circular(
                                                                                 20)
-    
+
                                                                         ),
                                                                         child: Padding(
                                                                           padding: const EdgeInsets.only(left: 20,right: 20),
@@ -2712,6 +2734,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                             ],
                                                                           ),
                                                                         ),
+                                                                      )),
                                                                       ),
                                                                       // Container(
                                                                       //   height: 35,
@@ -2877,8 +2900,12 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                       .toString());
                                                                 }*/
                                                                       },
-                                                                      child:
-                                                                      Container(
+                                                                                                                                            child:
+                                                                      BoostWrap(
+                                                                        show: _searchResult[index].isBoostCall,
+                                                                        child: EmergencyWrap(
+                                                                        show: _searchResult[index].isEmergencyCall,
+                                                                        child: Container(
                                                                         height: MediaQuery.of(context).size.height*0.045,
                                                                         decoration: BoxDecoration(
                                                                             // color: setBorderColorChat(
@@ -2890,7 +2917,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                             // BorderRadius.circular(
                                                                             //     10)
                                                                            border:Border.all(width: 2,color:
-    
+
                                                                             setBorderColorChat(
                                                                                 _searchResult[
                                                                                 index]
@@ -2898,14 +2925,14 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                                 _searchResult[
                                                                                 index]
                                                                                     .is_busy)
-    
+
                                                                             ) ,
                                                                             borderRadius:
                                                                             BorderRadius
                                                                                 .circular(
                                                                                 20)
-    
-    
+
+
                                                                         ),
                                                                         child: Padding(
                                                                           padding: const EdgeInsets.only(left: 20,right: 20),
@@ -2937,6 +2964,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                             ],
                                                                           ),
                                                                         ),
+                                                                      )),
                                                                       ),
                                                                       /* Container(
                                                                 height: 35,
@@ -3101,7 +3129,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                         ? InkWell(
                                                                       onTap:
                                                                           () {
-                                                                        if (_searchResult[index].is_busy == 0 && _searchResult[index].isVideoOnline == "on") {
+                                                                        if (_searchResult[index].is_busy == 0 && (_searchResult[index].isVideoOnline == "on" || _searchResult[index].isEmergencyCall)) {
                                                                           //print("==============================================="+wallet.toString());
                                                                           bottomSheet(us_name!, us_image!,_searchResult[index].astro_number.toString(), context, _searchResult[index].id.toString(), (_searchResult[index].per_min_video_call_offer.isEmpty) ? _searchResult[index].perMinVideoCall.toString() : _searchResult[index].per_min_video_call_offer.toString(), "5", _searchResult[index].profileImg!, currency, "+91", _searchResult[index].name!, wallet.toString(), "video", loading);
                                                                         } else {
@@ -3109,7 +3137,11 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                         }
                                                                       },
                                                                       child:
-                                                                      Container(
+                                                                      BoostWrap(
+                                                                        show: _searchResult[index].isBoostVideo,
+                                                                        child: EmergencyWrap(
+                                                                        show: _searchResult[index].isEmergencyCall,
+                                                                        child: Container(
                                                                         height: 35,
                                                                         alignment: Alignment.center,
                                                                         decoration: BoxDecoration(color: setBorderColorChat(astroList[index].isVideoOnline!, _searchResult[index].is_busy), borderRadius: BorderRadius.circular(10)),
@@ -3125,6 +3157,7 @@ class _TalkAstrologer2State extends State<TalkAstrologer2> {
                                                                             ),
                                                                           ],
                                                                         ),
+                                                                        ))
                                                                       ),
                                                                     )
                                                                         : SizedBox(),

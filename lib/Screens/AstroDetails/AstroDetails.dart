@@ -11,6 +11,7 @@ import 'package:astro_gurujii/Screens/WebviewScreen.dart';
 import 'package:astro_gurujii/Screens/bottomSheet.dart';
 import 'package:astro_gurujii/Setup/SetUp.dart';
 import 'package:astro_gurujii/Setup/app_colors.dart';
+import 'package:astro_gurujii/widget/astro_badges.dart';
 import 'package:astro_gurujii/Setup/app_images.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shimmer/shimmer.dart';
@@ -1861,7 +1862,7 @@ CustomText(
                               /// 1 check status astrologer is busy or offline
                                getProfile();
                               if (data[0].is_busy == 0 &&
-                                  data[0].isChatOnline == "off") {
+                                  data[0].isChatOnline == "off" && !data[0].isEmergencyChat) {
                                 callNotifyMeApi(
                                     id: data[0].id.toString(), type: "chat");
                               } else {
@@ -1905,7 +1906,11 @@ CustomText(
                                 }
                               }
                             },
-                            child: Container(
+                            child: BoostWrap(
+                              show: data[0].isBoostChat,
+                              child: EmergencyWrap(
+                              show: data[0].isEmergencyChat,
+                              child: Container(
                               height: 60,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
@@ -1982,6 +1987,7 @@ CustomText(
                               ),
                             ),
                           ),
+                            ))  
                         ),
                         const SizedBox(
                           width: 10,
@@ -1992,7 +1998,7 @@ CustomText(
                             onTap: () async {
                                getProfile();
                               if (data[0].is_busy == 0 &&
-                                  data[0].isVoiceOnline == "off") {
+                                  data[0].isVoiceOnline == "off" && !data[0].isEmergencyCall) {
                                 callNotifyMeApi(
                                     id: data[0].id.toString(), type: "audio");
                               } else {
@@ -2017,7 +2023,11 @@ CustomText(
                                     loading);
                               }
                             },
-                            child: Container(
+                            child: BoostWrap(
+                              show: data[0].isBoostCall,
+                              child: EmergencyWrap(
+                              show: data[0].isEmergencyCall,
+                              child: Container(
                               height: 60,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
@@ -2094,6 +2104,7 @@ CustomText(
                                   ),
                                 ],
                               ),
+                            )),
                             ),
                           ),
                         ),
@@ -2106,7 +2117,7 @@ CustomText(
                             onTap: () async {
                                getProfile();
                               if (data[0].is_busy == 0 &&
-                                  data[0].isVideoOnline == "off") {
+                                  data[0].isVideoOnline == "off" && !data[0].isEmergencyCall) {
                                 callNotifyMeApi(
                                     id: data[0].id.toString(), type: "audio");
                               } else {
@@ -2131,7 +2142,11 @@ CustomText(
                                     loading);
                               }
                             },
-                            child: Container(
+                            child: BoostWrap(
+                              show: data[0].isBoostVideo,
+                              child: EmergencyWrap(
+                              show: data[0].isEmergencyCall,
+                              child: Container(
                               height: 60,
                               alignment: Alignment.center,
                               decoration: BoxDecoration(
@@ -2209,6 +2224,7 @@ CustomText(
                               ),
                             ),
                           ),
+                            ))
                         ),
                       ],
                     ),

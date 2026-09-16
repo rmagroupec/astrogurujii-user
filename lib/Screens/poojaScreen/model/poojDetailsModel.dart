@@ -4,12 +4,14 @@ class PoojaDetailModel {
   String? message;
   var participents;
 
-  PoojaDetailModel({this.status, this.data, this.message,this.participents});
+  PoojaDetailModel({this.status, this.data, this.message, this.participents});
 
   PoojaDetailModel.fromJson(Map<String, dynamic> json) {
-    status = json['status'];
-    data = json['data'] != null ? new Data.fromJson(json['data']) : null;
-    message = json['message'];
+    status = json['status'] == true;
+    data = (json['data'] is Map)
+        ? Data.fromJson(Map<String, dynamic>.from(json['data']))
+        : null;
+    message = json['message']?.toString();
     participents = json['participents'];
   }
 
@@ -72,48 +74,52 @@ class Data {
         this.updatedAt,
         this.iV});
 
+  // Helper: safely turn any JSON value into List<String>, no matter whether
+  // it's null, missing, a String, a List of mixed types, or anything else.
+  static List<String> _asStringList(dynamic value) {
+    if (value is List) {
+      return value.map((e) => e?.toString() ?? '').toList();
+    }
+    return <String>[];
+  }
+
+  // Helper: safely turn any JSON value into a List<Map>, so a malformed or
+  // missing array never throws while building sub-object lists below.
+  static List<Map<String, dynamic>> _asMapList(dynamic value) {
+    if (value is List) {
+      return value
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+    return <Map<String, dynamic>>[];
+  }
+
   Data.fromJson(Map<String, dynamic> json) {
-    pujaImage = json['pujaImage'];
-    bannerImages = json['bannerImages'].cast<String>();
-    pujaDate = json['pujaDate'];
-    mandirName = json['mandirName'];
-    aboutPuja = json['aboutPuja'];
-    purposeOfPooja = json['purposeOfPooja'];
-    aboutTempalTitle = json['aboutTempalTitle'];
-    templeImage = json['templeImage'];
-    aboutTempalDescription = json['aboutTempalDescription'];
-    if (json['benifits'] != null) {
-      benifits = <Benifits>[];
-      json['benifits'].forEach((v) {
-        benifits!.add(new Benifits.fromJson(v));
-      });
-    }
-    if (json['faq'] != null) {
-      faq = <Faq>[];
-      json['faq'].forEach((v) {
-        faq!.add(new Faq.fromJson(v));
-      });
-    }
-    if (json['reviews'] != null) {
-      reviews = <Reviews>[];
-      json['reviews'].forEach((v) {
-        reviews!.add(new Reviews.fromJson(v));
-      });
-    }
-    isDelete = json['is_delete'];
-    colorStatus = json['colorStatus'];
-    sId = json['_id'];
-    title = json['title'];
-    if (json['packages'] != null) {
-      packages = <Packages>[];
-      json['packages'].forEach((v) {
-        packages!.add(new Packages.fromJson(v));
-      });
-    }
-    pujaDatetime = json['pujaDatetime'];
-    createdAt = json['createdAt'];
-    updatedAt = json['updatedAt'];
-    iV = json['__v'];
+    pujaImage = json['pujaImage']?.toString();
+    bannerImages = _asStringList(json['bannerImages']);          // was .cast<String>() — crashed on null
+    pujaDate = json['pujaDate']?.toString();
+    mandirName = json['mandirName']?.toString();
+    aboutPuja = json['aboutPuja']?.toString();
+    purposeOfPooja = json['purposeOfPooja']?.toString();
+    aboutTempalTitle = json['aboutTempalTitle']?.toString();
+    templeImage = json['templeImage']?.toString();
+    aboutTempalDescription = json['aboutTempalDescription']?.toString();
+
+    benifits = _asMapList(json['benifits']).map((v) => Benifits.fromJson(v)).toList();
+    faq = _asMapList(json['faq']).map((v) => Faq.fromJson(v)).toList();
+    reviews = _asMapList(json['reviews']).map((v) => Reviews.fromJson(v)).toList();
+    packages = _asMapList(json['packages']).map((v) => Packages.fromJson(v)).toList();
+
+    isDelete = json['is_delete']?.toString();
+    colorStatus = json['colorStatus']?.toString();
+    sId = json['_id']?.toString();
+    title = json['title']?.toString();
+
+    pujaDatetime = json['pujaDatetime']?.toString();
+    createdAt = json['createdAt']?.toString();
+    updatedAt = json['updatedAt']?.toString();
+    iV = json['__v'] is int ? json['__v'] as int : int.tryParse(json['__v']?.toString() ?? '');
   }
 
   Map<String, dynamic> toJson() {
@@ -127,22 +133,14 @@ class Data {
     data['aboutTempalTitle'] = this.aboutTempalTitle;
     data['templeImage'] = this.templeImage;
     data['aboutTempalDescription'] = this.aboutTempalDescription;
-    if (this.benifits != null) {
-      data['benifits'] = this.benifits!.map((v) => v.toJson()).toList();
-    }
-    if (this.faq != null) {
-      data['faq'] = this.faq!.map((v) => v.toJson()).toList();
-    }
+    data['benifits'] = (this.benifits ?? []).map((v) => v.toJson()).toList();
+    data['faq'] = (this.faq ?? []).map((v) => v.toJson()).toList();
     data['is_delete'] = this.isDelete;
     data['colorStatus'] = this.colorStatus;
     data['_id'] = this.sId;
     data['title'] = this.title;
-    if (this.packages != null) {
-      data['packages'] = this.packages!.map((v) => v.toJson()).toList();
-    }
-    if (this.reviews != null) {
-      data['reviews'] = this.reviews!.map((v) => v.toJson()).toList();
-    }
+    data['packages'] = (this.packages ?? []).map((v) => v.toJson()).toList();
+    data['reviews'] = (this.reviews ?? []).map((v) => v.toJson()).toList();
     data['pujaDatetime'] = this.pujaDatetime;
     data['createdAt'] = this.createdAt;
     data['updatedAt'] = this.updatedAt;
@@ -152,14 +150,14 @@ class Data {
 }
 
 class Benifits {
- var title;
-  var description;
+  String? title;
+  String? description;
 
   Benifits({this.title, this.description});
 
   Benifits.fromJson(Map<String, dynamic> json) {
-    title = json['title'];
-    description = json['description'];
+    title = json['title']?.toString();
+    description = json['description']?.toString();
   }
 
   Map<String, dynamic> toJson() {
@@ -177,8 +175,8 @@ class Faq {
   Faq({this.question, this.answer});
 
   Faq.fromJson(Map<String, dynamic> json) {
-    question = json['question'];
-    answer = json['answer'];
+    question = json['question']?.toString();
+    answer = json['answer']?.toString();
   }
 
   Map<String, dynamic> toJson() {
@@ -204,11 +202,11 @@ class Packages {
         this.packagePrice});
 
   Packages.fromJson(Map<String, dynamic> json) {
-    packageType = json['packageType'];
-    packageDescription = json['packageDescription'].cast<String>();
-    sId = json['_id'];
-    packageName = json['packageName'];
-    packagePrice = json['packagePrice'];
+    packageType = json['packageType']?.toString();
+    packageDescription = Data._asStringList(json['packageDescription']); // was .cast<String>() — crashed on null
+    sId = json['_id']?.toString();
+    packageName = json['packageName']?.toString();
+    packagePrice = json['packagePrice']?.toString();
   }
 
   Map<String, dynamic> toJson() {
@@ -231,10 +229,10 @@ class Reviews {
   Reviews({this.photo, this.sId, this.name, this.review});
 
   Reviews.fromJson(Map<String, dynamic> json) {
-    photo = json['photo'];
-    sId = json['_id'];
-    name = json['name'];
-    review = json['review'];
+    photo = json['photo']?.toString();
+    sId = json['_id']?.toString();
+    name = json['name']?.toString();
+    review = json['review']?.toString();
   }
 
   Map<String, dynamic> toJson() {
@@ -246,197 +244,3 @@ class Reviews {
     return data;
   }
 }
-
-
-
-
-
-
-// class PoojaDetailModel {
-//   bool? status;
-//   Data? data;
-//   String? message;
-//
-//   PoojaDetailModel({this.status, this.data, this.message});
-//
-//   PoojaDetailModel.fromJson(Map<String, dynamic> json) {
-//     status = json['status'];
-//     data = json['data'] != null ? new Data.fromJson(json['data']) : null;
-//     message = json['message'];
-//   }
-//
-//   Map<String, dynamic> toJson() {
-//     final Map<String, dynamic> data = new Map<String, dynamic>();
-//     data['status'] = this.status;
-//     if (this.data != null) {
-//       data['data'] = this.data!.toJson();
-//     }
-//     data['message'] = this.message;
-//     return data;
-//   }
-// }
-//
-// class Data {
-//   String? pujaImage;
-//   String? pujaDate;
-//   String? mandirName;
-//   String? aboutPuja;
-//   String? aboutTempalTitle;
-//   String? aboutTempalDescription;
-//   List<Benifits>? benifits;
-//   List<Packages>? packages;
-//   List<Faq>? faq;
-//   String? isDelete;
-//   String? colorStatus;
-//   String? sId;
-//   String? title;
-//   String? pujaDatetime;
-//   String? createdAt;
-//   String? updatedAt;
-//   int? iV;
-//
-//   Data(
-//       {this.pujaImage,
-//         this.pujaDate,
-//         this.mandirName,
-//         this.aboutPuja,
-//         this.aboutTempalTitle,
-//         this.aboutTempalDescription,
-//         this.benifits,
-//         this.packages,
-//         this.faq,
-//         this.isDelete,
-//         this.colorStatus,
-//         this.sId,
-//         this.title,
-//         this.pujaDatetime,
-//         this.createdAt,
-//         this.updatedAt,
-//         this.iV});
-//
-//   Data.fromJson(Map<String, dynamic> json) {
-//     pujaImage = json['pujaImage'];
-//     pujaDate = json['pujaDate'];
-//     mandirName = json['mandirName'];
-//     aboutPuja = json['aboutPuja'];
-//     aboutTempalTitle = json['aboutTempalTitle'];
-//     aboutTempalDescription = json['aboutTempalDescription'];
-//     if (json['benifits'] != null) {
-//       benifits = <Benifits>[];
-//       json['benifits'].forEach((v) {
-//         benifits!.add(new Benifits.fromJson(v));
-//       });
-//     }
-//     if (json['packages'] != null) {
-//       packages = <Packages>[];
-//       json['packages'].forEach((v) {
-//         packages!.add(new Packages.fromJson(v));
-//       });
-//     }
-//     if (json['faq'] != null) {
-//       faq = <Faq>[];
-//       json['faq'].forEach((v) {
-//         faq!.add(new Faq.fromJson(v));
-//       });
-//     }
-//     isDelete = json['is_delete'];
-//     colorStatus = json['colorStatus'];
-//     sId = json['_id'];
-//     title = json['title'];
-//     pujaDatetime = json['pujaDatetime'];
-//     createdAt = json['createdAt'];
-//     updatedAt = json['updatedAt'];
-//     iV = json['__v'];
-//   }
-//
-//   Map<String, dynamic> toJson() {
-//     final Map<String, dynamic> data = new Map<String, dynamic>();
-//     data['pujaImage'] = this.pujaImage;
-//     data['pujaDate'] = this.pujaDate;
-//     data['mandirName'] = this.mandirName;
-//     data['aboutPuja'] = this.aboutPuja;
-//     data['aboutTempalTitle'] = this.aboutTempalTitle;
-//     data['aboutTempalDescription'] = this.aboutTempalDescription;
-//     if (this.benifits != null) {
-//       data['benifits'] = this.benifits!.map((v) => v.toJson()).toList();
-//     }
-//     if (this.packages != null) {
-//       data['packages'] = this.packages!.map((v) => v.toJson()).toList();
-//     }
-//     if (this.faq != null) {
-//       data['faq'] = this.faq!.map((v) => v.toJson()).toList();
-//     }
-//     data['is_delete'] = this.isDelete;
-//     data['colorStatus'] = this.colorStatus;
-//     data['_id'] = this.sId;
-//     data['title'] = this.title;
-//     data['pujaDatetime'] = this.pujaDatetime;
-//     data['createdAt'] = this.createdAt;
-//     data['updatedAt'] = this.updatedAt;
-//     data['__v'] = this.iV;
-//     return data;
-//   }
-// }
-//
-// class Benifits {
-//   String? title;
-//   String? description;
-//
-//   Benifits({this.title, this.description});
-//
-//   Benifits.fromJson(Map<String, dynamic> json) {
-//     title = json['title'];
-//     description = json['description'];
-//   }
-//
-//   Map<String, dynamic> toJson() {
-//     final Map<String, dynamic> data = new Map<String, dynamic>();
-//     data['title'] = this.title;
-//     data['description'] = this.description;
-//     return data;
-//   }
-// }
-//
-// class Packages {
-//   String? packageName;
-//   String? packagePrice;
-//   String? packageType;
-//   List<String>? packageDescription;
-//
-//   Packages({this.packageName, this.packagePrice, this.packageDescription});
-//
-//   Packages.fromJson(Map<String, dynamic> json) {
-//     packageName = json['packageName'];
-//     packagePrice = json['packagePrice'];
-//     packageType = json['packageType'];
-//     packageDescription = json['packageDescription'].cast<String>();
-//   }
-//
-//   Map<String, dynamic> toJson() {
-//     final Map<String, dynamic> data = new Map<String, dynamic>();
-//     data['packageName'] = this.packageName;
-//     data['packagePrice'] = this.packagePrice;
-//     data['packageType'] = this.packageType;
-//     data['packageDescription'] = this.packageDescription;
-//     return data;
-//   }
-// }
-//
-// class Faq {
-//   String? question;
-//   String? answer;
-//
-//   Faq({this.question, this.answer});
-//
-//   Faq.fromJson(Map<String, dynamic> json) {
-//     question = json['question'];
-//     answer = json['answer'];
-//   }
-//
-//   Map<String, dynamic> toJson() {
-//     final Map<String, dynamic> data = new Map<String, dynamic>();
-//     data['question'] = this.question;
-//     data['answer'] = this.answer;
-//     return data;
-//   }
-// }

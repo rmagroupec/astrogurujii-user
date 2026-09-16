@@ -401,6 +401,14 @@ class HttpServices {
   }
 
 
+Future<Map<String, dynamic>?> pujaLiveJoin(String pujaId) async {
+  final _prefs = await SharedPreferences.getInstance();
+  Map reqBody = {"puja_id": pujaId};
+  final response = await _apiHelper.postBearer(
+      'user_api/puja_live_join', reqBody, "${_prefs.get('token')}");
+  return response is Map<String, dynamic> ? response : null;
+}
+
   Future<dynamic> get_live_users_count({required String id}) async {
     final _prefs = await SharedPreferences.getInstance();
     Map reqBody = {"live_id": id};

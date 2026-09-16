@@ -6,6 +6,7 @@ import 'package:astro_gurujii/Screens/pooja_orders/ui/viewDetails.dart';
 import 'package:astro_gurujii/Utilities/CustomText.dart';
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import '../../live/PujaLiveViewScreen.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
 import 'package:shimmer/shimmer.dart';
@@ -305,41 +306,21 @@ class _PoojaOrderListState extends State<PoojaOrderList> {
                                         ),
                                         InkWell(
                                           onTap: () {
-                                            if (temp.is_live == true) {
-                                              // Navigator.push(
-                                              //     context,
-                                              //     MaterialPageRoute(
-                                              //         builder: (context) =>
-                                              //             LiveVideoCallScreen(
-                                              //                 screenType:
-                                              //                     "pooja",
-                                              //                 id: temp.sId,
-                                              //                 channelName: temp
-                                              //                     .channelId!,
-                                              //                 astroid:
-                                              //                     temp.astrologerId ??
-                                              //                         "",
-                                              //                 name:
-                                              //                     temp.astrologerName ??
-                                              //                         "",
-                                              //                 astroImage: temp
-                                              //                     .pujaId!
-                                              //                     .pujaImage
-                                              //                     .toString(),
-                                              //                 profile:
-                                              //                     ""))).then(
-                                              //     (value) {
-                                              //   // getLiveAstrologer();
-                                              //   setState(() {
-                                              //     screenController
-                                              //         .poojaBookingApi();
-                                              //   });
-                                              // });
-                                            } else {
-                                              Fluttertoast.showToast(
-                                                  msg: "User not live");
-                                            }
-                                          },
+  if (temp.is_live == true) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PujaLiveViewScreen(
+          pujaId    : temp.pujaId?.sId ?? '',   // the puja's own _id, NOT the booking id
+          pujaTitle : temp.pujaId?.title ?? 'Puja Live',
+          pujaImage : temp.pujaId?.pujaImage ?? '',
+        ),
+      ),
+    );
+  } else {
+    Fluttertoast.showToast(msg: 'The puja hasn\'t gone live yet');
+  }
+},
                                           child: Padding(
                                             padding: const EdgeInsets.all(8.0),
                                             child: Container(
@@ -353,7 +334,7 @@ class _PoojaOrderListState extends State<PoojaOrderList> {
                                                     const EdgeInsets.fromLTRB(
                                                         15, 5, 15, 5),
                                                 child: CustomText(
-                                                  text:temp.is_live == true ? "Join Live" : "Wait For Live",
+                                                  text: "Join Live",
                                                    fontFamily: 'poppinssemibold',
                             fontWeight: FontWeight.bold,
                                                   color: whiteColor,

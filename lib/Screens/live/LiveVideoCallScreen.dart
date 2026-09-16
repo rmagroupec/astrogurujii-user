@@ -437,6 +437,11 @@ void dispose() {
   // Step 1: call_initiate API → write pending node to Firebase
   Future<void> _initiateCall() async {
     if (widget.astrologerId == null) return;
+    final granted = await handlePermissionsForCall(context);
+  if (!granted) {
+    Fluttertoast.showToast(msg: 'Microphone permission is required for a private call');
+    return;
+  }
     if (mounted) setState(() => _pcState = _PCState.requesting);
 
     try {
@@ -514,16 +519,22 @@ void dispose() {
 
 
  Future<void> _onCallAccepted() async {
+
   if (mounted) setState(() => _pcState = _PCState.active);
 
-  await _engine.setClientRole(role: ClientRoleType.clientRoleBroadcaster);
+  final granted = await handlePermissionsForCall(context);
+  if (!granted) {
+    Fluttertoast.showToast(msg: 'Microphone permission required');
+    // _endPrivateCall();
+    return;
+  }
+
   await _engine.enableAudio();
   await _engine.enableLocalAudio(true);
   await _engine.setDefaultAudioRouteToSpeakerphone(true);
   await _engine.setEnableSpeakerphone(true);
 
-  _privateUid = DateTime.now().millisecondsSinceEpoch % 100000 + 2000;
-
+  _privateUid = DateTime.now().millisecondsSinceEpoch % 100000 + 500000;
   try {
     await (_engine as RtcEngineEx).joinChannelEx(
       token     : _privateToken,
@@ -698,7 +709,7 @@ void _cleanupPrivateCall() {
     } catch (e) { log('[Private] ❌ leaveChannelEx failed: $e'); }
   }
 
-  _engine.setClientRole(role: ClientRoleType.clientRoleAudience);
+  // _engine.setClientRole(role: ClientRoleType.clientRoleAudience);
   _engine.setEnableSpeakerphone(false);
 
   _privateUid       = null;

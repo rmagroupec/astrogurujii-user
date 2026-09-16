@@ -108,13 +108,22 @@ class PoojaController extends GetxController {
   }
 
   void poojaDetailsApi(String instaId) async {
-    poojaDetailsLoading.value = true;
+  poojaDetailsLoading.value = true;
+  update();
+
+  try {
     poojaDetailModel = await _httpServices.poojaDetailsApi(instaId);
-    // await translateModel();
-    print(poojaDetailModel!.data!.packages);
-    poojaDetailsLoading.value = false;
-    update();
+  } catch (e) {
+    poojaDetailModel = null;
   }
+
+  if (poojaDetailModel == null || poojaDetailModel!.data == null) {
+    Fluttertoast.showToast(msg: poojaDetailModel?.message ?? 'Could not load puja details');
+  }
+
+  poojaDetailsLoading.value = false;
+  update();
+}
 
   // void poojaDetailsApi(String instaId) async {
   //   // if (poojaDetailModel == null) {

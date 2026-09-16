@@ -74,6 +74,11 @@ class Results {
   var astro_country;
   int? totalRating;
   int? rating_total_person;
+  bool isBoostChat = false;
+  bool isBoostCall = false;
+  bool isBoostVideo = false;
+  bool isEmergencyChat = false;
+  bool isEmergencyCall = false;
 
   List<Language>? language;
   List<AstroCategory>? category;
@@ -146,10 +151,15 @@ class Results {
     per_min_chat_offer = _handleNaN(json['per_min_chat_offer']);
     per_min_voice_call_offer = _handleNaN(json['per_min_voice_call_offer']);
     per_min_video_call_offer = _handleNaN(json['per_min_video_call_offer']);
-    is_busy = json['is_busy'];
+    is_busy = json['is_busy'] is bool ? (json['is_busy'] ? 1 : 0) : (json['is_busy'] ?? 0);
     name = json['name'];
     about = json['about'];
     state = json['state'];
+    isBoostChat = json['is_boost_chat'] ?? false;
+    isBoostCall = json['is_boost_call'] ?? false;
+    isBoostVideo = json['is_boost_video'] ?? false;
+    isEmergencyChat = json['is_emergency_chat'] ?? false;
+    isEmergencyCall = json['is_emergency_call'] ?? false;
     city = json['city'];
     astro_country = json['astro_country'];
     experience = json['experience'];
@@ -217,6 +227,12 @@ class Results {
     data['name'] = this.name;
     data['is_Follow'] = this.is_Follow;
     data['follow_count'] = this.follow_count;
+     data['is_busy'] = this.is_busy;
+      data['is_boost_chat']  = this.isBoostChat    ;
+   data['is_boost_call'] = this.isBoostCall    ;  
+    data['is_boost_video']= this.isBoostVideo ;    
+    data['is_emergency_chat'] =this.isEmergencyChat ; 
+    data['is_emergency_call']  = this.isEmergencyCall;  
     data['about'] = this.about;
     data['city'] = this.city;
     data['state'] = this.state;
